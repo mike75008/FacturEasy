@@ -9,13 +9,17 @@ import { PremiumInput } from "@/components/premium/premium-input";
 import { PageTransition } from "@/components/premium/page-transition";
 import {
   FileText, Plus, Search, Edit2, Trash2, Eye, Send, Check, X,
-  ChevronRight, Receipt, FileCheck, ArrowRight,
+  ChevronRight, Receipt, FileCheck, ArrowRight, ShieldCheck, AlertTriangle,
+  CheckCircle2, XCircle, MessageSquare, Clock,
 } from "lucide-react";
 import {
   getDocuments, saveDocument, deleteDocument, deleteDocumentLines,
   getDocumentLines, saveDocumentLine, deleteDocumentLine,
   getClients, getProducts, generateDocumentNumber,
+  verifyDocument, addDocumentValidation, getDocumentValidations,
+  addAuditLog,
 } from "@/lib/local-storage";
+import type { VerificationResult, LocalValidation } from "@/lib/local-storage";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { calculateLineTotals as calcLine } from "@/lib/validators";
 import type { Document as Doc, DocumentLine, Client, Product } from "@/types/database";
@@ -406,81 +410,230 @@ export default function DocumentsPage() {
 
           {/* ═══ DETAIL ═══ */}
           {view === "detail" && selectedDoc && (
-            <motion.div key="detail" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-              <button onClick={() => setView("list")} className="flex items-center gap-1 text-sm font-sans text-atlantic-200/40 hover:text-gold-400 transition-colors mb-4">← Retour</button>
-
-              <GlassCard hover={false}>
-                <div className="flex items-start justify-between mb-6">
-                  <div>
-                    <div className="flex items-center gap-3 mb-1">
-                      <h3 className="text-xl font-display font-bold text-white">{selectedDoc.number}</h3>
-                      <span className={`text-xs font-sans px-2 py-0.5 rounded-full ${(STATUS_LABELS[selectedDoc.status] || STATUS_LABELS.brouillon).color}`}>
-                        {(STATUS_LABELS[selectedDoc.status] || STATUS_LABELS.brouillon).label}
-                      </span>
-                    </div>
-                    <p className="text-sm font-sans text-atlantic-200/40">
-                      {getClientName(selectedDoc.client_id)} • {formatDateShort(selectedDoc.date)}
-                      {selectedDoc.due_date && ` • Échéance : ${formatDateShort(selectedDoc.due_date)}`}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    {selectedDoc.status === "brouillon" && (
-                      <PremiumButton size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => updateStatus(selectedDoc, "envoye")}>Envoyer</PremiumButton>
-                    )}
-                    {selectedDoc.status === "envoye" && (
-                      <PremiumButton size="sm" icon={<Check className="w-3.5 h-3.5" />} onClick={() => updateStatus(selectedDoc, "paye")}>Marquer payé</PremiumButton>
-                    )}
-                    <PremiumButton variant="ghost" size="sm" onClick={() => handleDeleteDoc(selectedDoc.id)} className="text-red-400 hover:bg-red-400/10"><Trash2 className="w-3.5 h-3.5" /></PremiumButton>
-                  </div>
-                </div>
-
-                {/* Lines table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm font-sans">
-                    <thead>
-                      <tr className="text-atlantic-200/40 text-xs uppercase tracking-wider border-b border-gold-400/10">
-                        <th className="text-left py-3 pr-4">Description</th>
-                        <th className="text-right py-3 px-2">Qté</th>
-                        <th className="text-right py-3 px-2">Prix HT</th>
-                        <th className="text-right py-3 px-2">TVA</th>
-                        <th className="text-right py-3 pl-2">Total TTC</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedLines.map((line) => (
-                        <tr key={line.id} className="border-b border-gold-400/5">
-                          <td className="py-3 pr-4 text-white">{line.description}</td>
-                          <td className="py-3 px-2 text-right text-atlantic-200/60">{line.quantity} {line.unit}</td>
-                          <td className="py-3 px-2 text-right text-atlantic-200/60">{formatCurrency(line.unit_price)}</td>
-                          <td className="py-3 px-2 text-right text-atlantic-200/60">{line.tva_rate}%</td>
-                          <td className="py-3 pl-2 text-right font-semibold text-gold-400">{formatCurrency(line.total_ttc)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Totals */}
-                <div className="mt-6 flex justify-end">
-                  <div className="w-64 space-y-2">
-                    <div className="flex justify-between text-sm"><span className="text-atlantic-200/50">Total HT</span><span>{formatCurrency(selectedDoc.total_ht)}</span></div>
-                    {selectedDoc.discount_amount > 0 && <div className="flex justify-between text-sm"><span className="text-atlantic-200/50">Remise</span><span className="text-red-400">-{formatCurrency(selectedDoc.discount_amount)}</span></div>}
-                    <div className="flex justify-between text-sm"><span className="text-atlantic-200/50">TVA</span><span>{formatCurrency(selectedDoc.total_tva)}</span></div>
-                    <div className="border-t border-gold-400/20 pt-2 flex justify-between"><span className="font-semibold text-gold-400">Total TTC</span><span className="text-lg font-display font-bold animated-gold-text">{formatCurrency(selectedDoc.total_ttc)}</span></div>
-                  </div>
-                </div>
-
-                {selectedDoc.notes && (
-                  <div className="mt-6 pt-4 border-t border-gold-400/10">
-                    <p className="text-xs font-sans text-atlantic-200/30 mb-1">Notes</p>
-                    <p className="text-sm font-sans text-atlantic-200/60">{selectedDoc.notes}</p>
-                  </div>
-                )}
-              </GlassCard>
-            </motion.div>
+            <DocumentDetail
+              doc={selectedDoc}
+              lines={selectedLines}
+              getClientName={getClientName}
+              onBack={() => setView("list")}
+              onUpdateStatus={(s) => { updateStatus(selectedDoc, s); }}
+              onDelete={() => handleDeleteDoc(selectedDoc.id)}
+              onRefresh={() => { setDocuments(getDocuments()); setSelectedDoc(getDocuments().find(d => d.id === selectedDoc.id) || null); }}
+            />
           )}
         </AnimatePresence>
       </div>
     </PageTransition>
+  );
+}
+
+// ═══════════════════════════════════════════
+// Document Detail with Validation N+1
+// ═══════════════════════════════════════════
+
+function DocumentDetail({ doc, lines, getClientName, onBack, onUpdateStatus, onDelete, onRefresh }: {
+  doc: Doc;
+  lines: DocumentLine[];
+  getClientName: (id: string) => string;
+  onBack: () => void;
+  onUpdateStatus: (status: string) => void;
+  onDelete: () => void;
+  onRefresh: () => void;
+}) {
+  const [verification, setVerification] = useState<VerificationResult | null>(null);
+  const [validations, setValidations] = useState<LocalValidation[]>([]);
+  const [validationComment, setValidationComment] = useState("");
+  const [showValidation, setShowValidation] = useState(false);
+
+  useEffect(() => {
+    setVerification(verifyDocument(doc.id));
+    setValidations(getDocumentValidations(doc.id));
+  }, [doc.id, doc.status]);
+
+  function handleValidate(action: "approve" | "reject" | "request_changes") {
+    addDocumentValidation({
+      document_id: doc.id,
+      action,
+      comment: validationComment || undefined,
+    });
+    setValidationComment("");
+    setShowValidation(false);
+    setValidations(getDocumentValidations(doc.id));
+    onRefresh();
+  }
+
+  const st = STATUS_LABELS[doc.status] || STATUS_LABELS.brouillon;
+
+  return (
+    <motion.div key="detail" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+      <button onClick={onBack} className="flex items-center gap-1 text-sm font-sans text-atlantic-200/40 hover:text-gold-400 transition-colors mb-4">← Retour</button>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main content */}
+        <div className="lg:col-span-2 space-y-4">
+          <GlassCard hover={false}>
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <div className="flex items-center gap-3 mb-1">
+                  <h3 className="text-xl font-display font-bold text-white">{doc.number}</h3>
+                  <span className={`text-xs font-sans px-2 py-0.5 rounded-full ${st.color}`}>{st.label}</span>
+                </div>
+                <p className="text-sm font-sans text-atlantic-200/40">
+                  {getClientName(doc.client_id)} • {formatDateShort(doc.date)}
+                  {doc.due_date && ` • Échéance : ${formatDateShort(doc.due_date)}`}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {doc.status === "brouillon" && (
+                  <PremiumButton size="sm" icon={<ShieldCheck className="w-3.5 h-3.5" />} onClick={() => setShowValidation(true)}>
+                    Demander validation
+                  </PremiumButton>
+                )}
+                {doc.status === "valide" && (
+                  <PremiumButton size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => onUpdateStatus("envoye")}>Envoyer</PremiumButton>
+                )}
+                {doc.status === "envoye" && (
+                  <PremiumButton size="sm" icon={<Check className="w-3.5 h-3.5" />} onClick={() => onUpdateStatus("paye")}>Payé</PremiumButton>
+                )}
+                <PremiumButton variant="ghost" size="sm" onClick={onDelete} className="text-red-400 hover:bg-red-400/10"><Trash2 className="w-3.5 h-3.5" /></PremiumButton>
+              </div>
+            </div>
+
+            {/* Lines table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm font-sans">
+                <thead>
+                  <tr className="text-atlantic-200/40 text-xs uppercase tracking-wider border-b border-gold-400/10">
+                    <th className="text-left py-3 pr-4">Description</th>
+                    <th className="text-right py-3 px-2">Qté</th>
+                    <th className="text-right py-3 px-2">Prix HT</th>
+                    <th className="text-right py-3 px-2">TVA</th>
+                    <th className="text-right py-3 pl-2">Total TTC</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((line) => (
+                    <tr key={line.id} className="border-b border-gold-400/5">
+                      <td className="py-3 pr-4 text-white">{line.description}</td>
+                      <td className="py-3 px-2 text-right text-atlantic-200/60">{line.quantity} {line.unit}</td>
+                      <td className="py-3 px-2 text-right text-atlantic-200/60">{formatCurrency(line.unit_price)}</td>
+                      <td className="py-3 px-2 text-right text-atlantic-200/60">{line.tva_rate}%</td>
+                      <td className="py-3 pl-2 text-right font-semibold text-gold-400">{formatCurrency(line.total_ttc)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Totals */}
+            <div className="mt-6 flex justify-end">
+              <div className="w-64 space-y-2">
+                <div className="flex justify-between text-sm"><span className="text-atlantic-200/50">Total HT</span><span>{formatCurrency(doc.total_ht)}</span></div>
+                {doc.discount_amount > 0 && <div className="flex justify-between text-sm"><span className="text-atlantic-200/50">Remise</span><span className="text-red-400">-{formatCurrency(doc.discount_amount)}</span></div>}
+                <div className="flex justify-between text-sm"><span className="text-atlantic-200/50">TVA</span><span>{formatCurrency(doc.total_tva)}</span></div>
+                <div className="border-t border-gold-400/20 pt-2 flex justify-between"><span className="font-semibold text-gold-400">Total TTC</span><span className="text-lg font-display font-bold animated-gold-text">{formatCurrency(doc.total_ttc)}</span></div>
+              </div>
+            </div>
+
+            {doc.notes && (
+              <div className="mt-6 pt-4 border-t border-gold-400/10">
+                <p className="text-xs font-sans text-atlantic-200/30 mb-1">Notes</p>
+                <p className="text-sm font-sans text-atlantic-200/60">{doc.notes}</p>
+              </div>
+            )}
+          </GlassCard>
+        </div>
+
+        {/* Sidebar: Verification + Validation */}
+        <div className="space-y-4">
+          {/* Auto-verification */}
+          {verification && (
+            <GlassCard hover={false}>
+              <div className="flex items-center gap-2 mb-4">
+                {verification.passed ? (
+                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                ) : (
+                  <AlertTriangle className="w-5 h-5 text-amber-400" />
+                )}
+                <h4 className="text-sm font-sans font-semibold text-white">Vérification auto</h4>
+              </div>
+              <div className="space-y-2">
+                {verification.checks.map((check, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    {check.ok ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mt-0.5 flex-shrink-0" />
+                    ) : (
+                      <XCircle className="w-3.5 h-3.5 text-red-400 mt-0.5 flex-shrink-0" />
+                    )}
+                    <div>
+                      <p className={`text-xs font-sans ${check.ok ? "text-atlantic-200/60" : "text-red-400"}`}>{check.label}</p>
+                      {check.detail && <p className="text-[10px] font-sans text-atlantic-200/30">{check.detail}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className={`mt-3 p-2 rounded-lg text-center text-xs font-sans ${verification.passed ? "bg-emerald-400/10 text-emerald-400" : "bg-red-400/10 text-red-400"}`}>
+                {verification.passed ? "Toutes les vérifications passent" : "Corrections nécessaires"}
+              </div>
+            </GlassCard>
+          )}
+
+          {/* Validation N+1 Panel */}
+          <AnimatePresence>
+            {showValidation && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+                <GlassCard hover={false} glow>
+                  <h4 className="text-sm font-sans font-semibold text-gold-400 mb-3 flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4" /> Validation N+1
+                  </h4>
+                  <textarea
+                    placeholder="Commentaire (optionnel)..."
+                    value={validationComment}
+                    onChange={(e) => setValidationComment(e.target.value)}
+                    rows={2}
+                    className="premium-input w-full text-sm resize-none mb-3"
+                  />
+                  <div className="flex gap-2">
+                    <PremiumButton size="sm" onClick={() => handleValidate("approve")} icon={<CheckCircle2 className="w-3.5 h-3.5" />} className="flex-1">
+                      Approuver
+                    </PremiumButton>
+                    <button onClick={() => handleValidate("reject")} className="flex-1 px-3 py-2 rounded-lg text-xs font-sans bg-red-400/10 text-red-400 hover:bg-red-400/20 transition-colors">
+                      Rejeter
+                    </button>
+                  </div>
+                  <button onClick={() => handleValidate("request_changes")} className="w-full mt-2 px-3 py-2 rounded-lg text-xs font-sans text-atlantic-200/50 hover:text-amber-400 hover:bg-amber-400/10 transition-colors">
+                    Demander des modifications
+                  </button>
+                </GlassCard>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Validation history */}
+          {validations.length > 0 && (
+            <GlassCard hover={false}>
+              <h4 className="text-sm font-sans font-semibold text-white mb-3 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-gold-400" /> Historique validations
+              </h4>
+              <div className="space-y-3">
+                {validations.map((v) => (
+                  <div key={v.id} className="flex items-start gap-2">
+                    {v.action === "approve" && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mt-0.5" />}
+                    {v.action === "reject" && <XCircle className="w-3.5 h-3.5 text-red-400 mt-0.5" />}
+                    {v.action === "request_changes" && <MessageSquare className="w-3.5 h-3.5 text-amber-400 mt-0.5" />}
+                    <div>
+                      <p className="text-xs font-sans text-white">
+                        {v.user_name} - {v.action === "approve" ? "Approuvé" : v.action === "reject" ? "Rejeté" : "Modifications demandées"}
+                      </p>
+                      {v.comment && <p className="text-[10px] font-sans text-atlantic-200/40 italic">{v.comment}</p>}
+                      <p className="text-[10px] font-sans text-atlantic-200/30">{new Date(v.created_at).toLocaleString("fr-FR")}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+          )}
+        </div>
+      </div>
+    </motion.div>
   );
 }

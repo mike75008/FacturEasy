@@ -458,6 +458,172 @@ export function getGamificationScore(clientId: string): GamificationScore | null
 }
 
 // ═══════════════════════════════════
+// DOCUMENT VALIDATIONS
+// ═══════════════════════════════════
+
+export interface LocalValidation {
+  id: string;
+  document_id: string;
+  action: "approve" | "reject" | "request_changes";
+  comment: string | null;
+  user_name: string;
+  created_at: string;
+}
+
+export function getDocumentValidations(documentId: string): LocalValidation[] {
+  return getStore<LocalValidation>("validations").filter(
+    (v) => v.document_id === documentId
+  );
+}
+
+export function addDocumentValidation(data: {
+  document_id: string;
+  action: "approve" | "reject" | "request_changes";
+  comment?: string;
+}): LocalValidation {
+  const validations = getStore<LocalValidation>("validations");
+  const entry: LocalValidation = {
+    id: generateId(),
+    document_id: data.document_id,
+    action: data.action,
+    comment: data.comment || null,
+    user_name: "Validateur N+1",
+    created_at: now(),
+  };
+  validations.push(entry);
+  setStore("validations", validations);
+
+  // Auto-update document status
+  const doc = getDocument(data.document_id);
+  if (doc) {
+    if (data.action === "approve") {
+      saveDocument({ ...doc, status: "valide", validated_by: "user-validator", validated_at: now() });
+    } else if (data.action === "reject") {
+      saveDocument({ ...doc, status: "refuse" });
+    }
+  }
+
+  addAuditLog({
+    action: `document_${data.action}`,
+    entity_type: "document",
+    entity_id: data.document_id,
+    new_values: { action: data.action, comment: data.comment },
+  });
+
+  return entry;
+}
+
+// ═══════════════════════════════════
+// AUDIT LOGS
+// ═══════════════════════════════════
+
+export interface LocalAuditLog {
+  id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  user_name: string;
+  created_at: string;
+}
+
+export function getAuditLogs(entityType?: string, entityId?: string): LocalAuditLog[] {
+  const all = getStore<LocalAuditLog>("audit_logs");
+  if (entityType && entityId) {
+    return all.filter((l) => l.entity_type === entityType && l.entity_id === entityId);
+  }
+  if (entityType) {
+    return all.filter((l) => l.entity_type === entityType);
+  }
+  return all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+}
+
+export function addAuditLog(data: {
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  old_values?: Record<string, unknown> | null;
+  new_values?: Record<string, unknown> | null;
+}): void {
+  const logs = getStore<LocalAuditLog>("audit_logs");
+  logs.push({
+    id: generateId(),
+    action: data.action,
+    entity_type: data.entity_type,
+    entity_id: data.entity_id,
+    old_values: data.old_values || null,
+    new_values: data.new_values || null,
+    user_name: "Utilisateur",
+    created_at: now(),
+  });
+  setStore("audit_logs", logs);
+}
+
+// ═══════════════════════════════════
+// DOCUMENT AUTO-VERIFICATION
+// ═══════════════════════════════════
+
+export interface VerificationResult {
+  passed: boolean;
+  checks: { label: string; ok: boolean; detail?: string }[];
+}
+
+export function verifyDocument(documentId: string): VerificationResult {
+  const doc = getDocument(documentId);
+  if (!doc) return { passed: false, checks: [{ label: "Document existe", ok: false }] };
+
+  const lines = getDocumentLines(documentId);
+  const org = getOrganization();
+  const client = getClient(doc.client_id);
+  const checks: { label: string; ok: boolean; detail?: string }[] = [];
+
+  // 1. Has lines
+  checks.push({ label: "Au moins une ligne", ok: lines.length > 0, detail: lines.length === 0 ? "Le document n'a aucune ligne" : undefined });
+
+  // 2. Totals match
+  let calcHt = 0, calcTva = 0;
+  lines.forEach((l) => { calcHt += l.total_ht; calcTva += l.total_tva; });
+  const discountAmt = calcHt * doc.discount_percent / 100;
+  const expectedHt = Math.round((calcHt - discountAmt) * 100) / 100;
+  // Allow small rounding diff
+  const htMatch = Math.abs(doc.total_ht - calcHt) < 0.02 || Math.abs(doc.total_ht - expectedHt) < 0.02;
+  checks.push({ label: "Totaux HT cohérents", ok: htMatch, detail: htMatch ? undefined : `Attendu ~${calcHt}€, trouvé ${doc.total_ht}€` });
+
+  // 3. TVA rates valid
+  const validRates = [0, 5.5, 10, 20];
+  const allRatesValid = lines.every((l) => validRates.includes(l.tva_rate));
+  checks.push({ label: "Taux TVA valides", ok: allRatesValid, detail: allRatesValid ? undefined : "Taux non standard détecté" });
+
+  // 4. Document number exists
+  checks.push({ label: "Numéro de document", ok: !!doc.number, detail: !doc.number ? "Numéro manquant" : undefined });
+
+  // 5. Client assigned
+  checks.push({ label: "Client assigné", ok: !!client, detail: !client ? "Aucun client" : undefined });
+
+  // 6. Vendor info
+  checks.push({ label: "Raison sociale vendeur", ok: !!org.name, detail: !org.name ? "Manquante dans Paramètres" : undefined });
+
+  // 7. Date present
+  checks.push({ label: "Date d'émission", ok: !!doc.date });
+
+  // 8. Due date for invoices
+  if (doc.type === "facture") {
+    checks.push({ label: "Date d'échéance", ok: !!doc.due_date, detail: !doc.due_date ? "Obligatoire pour les factures" : undefined });
+  }
+
+  // 9. No negative amounts
+  const noNeg = lines.every((l) => l.total_ht >= 0 && l.unit_price >= 0);
+  checks.push({ label: "Montants positifs", ok: noNeg });
+
+  // 10. Sequential number format
+  const numFormat = /^[A-Z]+-\d{4}-\d{5}$/.test(doc.number);
+  checks.push({ label: "Format numérotation", ok: numFormat, detail: numFormat ? undefined : "Format attendu: XXX-YYYY-NNNNN" });
+
+  return { passed: checks.every((c) => c.ok), checks };
+}
+
+// ═══════════════════════════════════
 // STATS helpers
 // ═══════════════════════════════════
 
