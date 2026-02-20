@@ -1,304 +1,428 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useState, useMemo } from "react";
 import { Topbar } from "@/components/dashboard/topbar";
 import { GlassCard } from "@/components/premium/glass-card";
 import { AnimatedCounter } from "@/components/premium/animated-counter";
 import { PageTransition } from "@/components/premium/page-transition";
 import {
-  FileText,
-  Users,
-  TrendingUp,
-  AlertTriangle,
-  DollarSign,
-  Clock,
-  ArrowUpRight,
-  ArrowDownRight,
-  Sparkles,
-  BarChart3,
-  CheckCircle2,
-  XCircle,
+  FileText, Users, TrendingUp, AlertTriangle, Clock, ArrowUpRight,
+  Sparkles, BarChart3, CheckCircle2, XCircle, Package, Bell, Send,
+  Award, Shield, Crown, Zap, Trophy, Rocket, Star,
 } from "lucide-react";
+import {
+  getDashboardStats, getDocuments, getClients, getReminders,
+  getUserGamification, getAuditLogs,
+} from "@/lib/local-storage";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import type { Document as Doc } from "@/types/database";
 
-const stats = [
-  {
-    label: "Chiffre d'affaires",
-    value: 24850,
-    prefix: "",
-    suffix: " \u20ac",
-    change: "+12.5%",
-    trend: "up",
-    icon: DollarSign,
-    color: "from-emerald-400/20 to-emerald-400/5",
-    iconColor: "text-emerald-400",
-  },
-  {
-    label: "Factures en cours",
-    value: 18,
-    prefix: "",
-    suffix: "",
-    change: "3 en retard",
-    trend: "warning",
-    icon: FileText,
-    color: "from-gold-400/20 to-gold-400/5",
-    iconColor: "text-gold-400",
-  },
-  {
-    label: "Clients actifs",
-    value: 42,
-    prefix: "",
-    suffix: "",
-    change: "+5 ce mois",
-    trend: "up",
-    icon: Users,
-    color: "from-blue-400/20 to-blue-400/5",
-    iconColor: "text-blue-400",
-  },
-  {
-    label: "Taux de paiement",
-    value: 94.2,
-    prefix: "",
-    suffix: "%",
-    change: "+2.1%",
-    trend: "up",
-    icon: TrendingUp,
-    color: "from-violet-400/20 to-violet-400/5",
-    iconColor: "text-violet-400",
-    decimals: 1,
-  },
-];
-
-const recentActivity = [
-  { type: "payment", text: "Paiement re\u00e7u - Facture FAC-2026-00042", time: "Il y a 2h", icon: CheckCircle2, color: "text-emerald-400" },
-  { type: "invoice", text: "Facture FAC-2026-00043 envoy\u00e9e \u00e0 Martin SARL", time: "Il y a 4h", icon: FileText, color: "text-blue-400" },
-  { type: "reminder", text: "Relance IA envoy\u00e9e - Dupont & Fils", time: "Il y a 6h", icon: Sparkles, color: "text-gold-400" },
-  { type: "overdue", text: "Facture FAC-2026-00038 en retard (15j)", time: "Il y a 1j", icon: XCircle, color: "text-red-400" },
-  { type: "quote", text: "Devis DEV-2026-00015 accept\u00e9 par Sophie L.", time: "Il y a 1j", icon: CheckCircle2, color: "text-emerald-400" },
-];
-
-const monthlyData = [35, 42, 38, 55, 48, 65, 72, 68, 85, 78, 92, 88];
-
-const container = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.08 },
-  },
+const LEVEL_COLORS = {
+  bronze: { bg: "from-amber-700/20 to-amber-700/5", text: "text-amber-600", border: "border-amber-600/30" },
+  argent: { bg: "from-slate-400/20 to-slate-400/5", text: "text-slate-300", border: "border-slate-300/30" },
+  or: { bg: "from-gold-400/20 to-gold-400/5", text: "text-gold-400", border: "border-gold-400/30" },
+  platine: { bg: "from-cyan-400/20 to-cyan-400/5", text: "text-cyan-300", border: "border-cyan-300/30" },
+  diamant: { bg: "from-violet-400/20 to-violet-400/5", text: "text-violet-300", border: "border-violet-300/30" },
 };
 
-const item = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
+const BADGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  FileText, Zap, Crown, Trophy, Package, Bell, Shield, TrendingUp, Rocket, CheckCircle2,
 };
 
 export default function DashboardPage() {
-  const maxData = Math.max(...monthlyData);
+  // localStorage est synchrone — on lit directement, zéro délai, zéro double render
+  const [stats] = useState(() => getDashboardStats());
+  const [gamification] = useState(() => getUserGamification());
+  const [documents] = useState(() => getDocuments());
+  const mounted = true;
+
+  const recentDocs = useMemo(() => {
+    return documents
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 5);
+  }, [documents]);
+
+  const clients = useMemo(() => getClients(), []);
+
+  function getClientName(clientId: string): string {
+    const c = clients.find((cl) => cl.id === clientId);
+    if (!c) return "—";
+    return c.company_name || `${c.first_name || ""} ${c.last_name || ""}`.trim();
+  }
+
+  if (!stats || !gamification) {
+    return (
+      <PageTransition>
+        <Topbar title="Tableau de bord" subtitle="Chargement..." />
+        <div className="p-6 flex items-center justify-center h-96">
+          <div className="w-8 h-8 border-2 border-gold-400/30 border-t-gold-400 rounded-full animate-spin" />
+        </div>
+      </PageTransition>
+    );
+  }
+
+  const kpis = [
+    {
+      label: "Chiffre d'affaires",
+      value: stats.totalCA,
+      suffix: " €",
+      trend: "up" as const,
+      change: `${stats.invoiceCount} factures`,
+      icon: TrendingUp,
+      color: "from-emerald-400/20 to-emerald-400/5",
+      iconColor: "text-emerald-400",
+    },
+    {
+      label: "En attente",
+      value: stats.pendingTotal,
+      suffix: " €",
+      trend: stats.pendingCount > 0 ? "warning" as const : "up" as const,
+      change: `${stats.pendingCount} facture${stats.pendingCount > 1 ? "s" : ""}`,
+      icon: FileText,
+      color: "from-gold-400/20 to-gold-400/5",
+      iconColor: "text-gold-400",
+    },
+    {
+      label: "Clients actifs",
+      value: stats.clientCount,
+      suffix: "",
+      trend: "up" as const,
+      change: `${stats.productCount} produits`,
+      icon: Users,
+      color: "from-blue-400/20 to-blue-400/5",
+      iconColor: "text-blue-400",
+    },
+    {
+      label: "Taux de paiement",
+      value: stats.paymentRate,
+      suffix: "%",
+      trend: stats.paymentRate >= 80 ? "up" as const : stats.paymentRate >= 50 ? "warning" as const : "down" as const,
+      change: stats.invoiceCount > 0 ? `${stats.overdueCount} en retard` : "Aucune facture",
+      icon: CheckCircle2,
+      color: "from-violet-400/20 to-violet-400/5",
+      iconColor: "text-violet-400",
+      decimals: 1,
+    },
+  ];
+
+  const maxCA = Math.max(...stats.monthlyCA, 1);
+  const months = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+  const currentMonth = new Date().getMonth();
+  const displayMonths = [...Array(12)].map((_, i) => months[(currentMonth - 11 + i + 12) % 12]);
+
+  const earnedBadges = gamification.badges.filter((b) => b.earned);
+  const levelColors = LEVEL_COLORS[gamification.level];
+
+  const gaugeRate = stats.invoiceCount > 0 ? Math.min(Math.round(stats.paymentRate), 100) : 0;
+  const circumference = 2 * Math.PI * 40;
+  const gaugeOffset = circumference * (1 - gaugeRate / 100);
 
   return (
     <PageTransition>
       <Topbar
         title="Tableau de bord"
-        subtitle="Vue d'ensemble de votre activit\u00e9"
+        subtitle={`${stats.invoiceCount} facture${stats.invoiceCount > 1 ? "s" : ""} • ${stats.clientCount} client${stats.clientCount > 1 ? "s" : ""}`}
       />
 
       <div className="p-6 space-y-6">
-        {/* KPI Cards */}
-        <motion.div
-          variants={container}
-          initial="hidden"
-          animate="show"
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
-        >
-          {stats.map((stat) => (
-            <motion.div key={stat.label} variants={item}>
-              <GlassCard className="group relative overflow-hidden">
-                {/* Background gradient */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${stat.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+        {/* Overdue alert */}
+        {stats.overdueCount > 0 && (
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-red-400/[0.06] border border-red-400/15">
+            <AlertTriangle className="w-5 h-5 text-red-400" />
+            <div className="flex-1">
+              <p className="text-sm font-sans font-medium text-red-400">{stats.overdueCount} facture{stats.overdueCount > 1 ? "s" : ""} en retard</p>
+              <p className="text-xs font-sans text-atlantic-200/40">Total impayé : {formatCurrency(stats.overdueTotal)}</p>
+            </div>
+          </div>
+        )}
 
-                <div className="relative flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-sans font-medium text-atlantic-200/50 uppercase tracking-wider">
-                      {stat.label}
-                    </p>
-                    <div className="text-3xl font-display font-bold text-white mt-2">
-                      <AnimatedCounter
-                        target={stat.value}
-                        suffix={stat.suffix}
-                        prefix={stat.prefix}
-                        decimals={stat.decimals || 0}
-                        duration={1.5}
-                      />
-                    </div>
-                    <div className="flex items-center gap-1 mt-2">
-                      {stat.trend === "up" ? (
-                        <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : stat.trend === "warning" ? (
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                      ) : (
-                        <ArrowDownRight className="w-3.5 h-3.5 text-red-400" />
-                      )}
-                      <span className={`text-xs font-sans ${
-                        stat.trend === "up" ? "text-emerald-400" :
-                        stat.trend === "warning" ? "text-amber-400" : "text-red-400"
-                      }`}>
-                        {stat.change}
-                      </span>
-                    </div>
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {kpis.map((kpi) => (
+            <GlassCard key={kpi.label} className="group relative overflow-hidden">
+              <div className={`absolute inset-0 bg-gradient-to-br ${kpi.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+              <div className="relative flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-sans font-medium text-atlantic-200/50 uppercase tracking-wider">{kpi.label}</p>
+                  <div className="text-3xl font-display font-bold text-white mt-2">
+                    <AnimatedCounter target={kpi.value} suffix={kpi.suffix} decimals={kpi.decimals || 0} duration={1.5} />
                   </div>
-                  <div className="p-2.5 rounded-xl bg-atlantic-700/50 group-hover:bg-atlantic-700/80 transition-colors">
-                    <stat.icon className={`w-5 h-5 ${stat.iconColor}`} />
+                  <div className="flex items-center gap-1 mt-2">
+                    {kpi.trend === "up" ? (
+                      <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : kpi.trend === "warning" ? (
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <XCircle className="w-3.5 h-3.5 text-red-400" />
+                    )}
+                    <span className={`text-xs font-sans ${kpi.trend === "up" ? "text-emerald-400" : kpi.trend === "warning" ? "text-amber-400" : "text-red-400"}`}>
+                      {kpi.change}
+                    </span>
                   </div>
                 </div>
-              </GlassCard>
-            </motion.div>
+                <div className="p-2.5 rounded-xl bg-atlantic-700/50 group-hover:bg-atlantic-700/80 transition-colors">
+                  <kpi.icon className={`w-5 h-5 ${kpi.iconColor}`} />
+                </div>
+              </div>
+            </GlassCard>
           ))}
-        </motion.div>
+        </div>
 
         {/* ROI Widget */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <GlassCard glow className="relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-r from-gold-400/[0.05] to-transparent" />
-            <div className="relative flex items-center gap-6">
-              <motion.div
-                animate={{ rotate: [0, 5, -5, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="p-4 rounded-2xl bg-gold-gradient shadow-premium-lg"
-              >
-                <DollarSign className="w-10 h-10 text-atlantic-900" />
-              </motion.div>
-              <div className="flex-1">
-                <h3 className="text-lg font-display font-semibold text-white flex items-center gap-2">
-                  ROI FacturePro
-                  <Sparkles className="w-4 h-4 text-gold-400" />
-                </h3>
-                <p className="text-sm font-sans text-atlantic-200/50 mt-1">
-                  Temps \u00e9conomis\u00e9 gr\u00e2ce \u00e0 l&apos;automatisation et l&apos;IA
-                </p>
-              </div>
+        <GlassCard glow className="relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-gold-400/[0.05] to-transparent" />
+          <div className="relative flex items-center gap-6">
+            {/* Money Bag SVG */}
+            <div className="relative flex-shrink-0 animate-float">
+              <svg width="80" height="80" viewBox="0 0 80 80" className="drop-shadow-[0_0_15px_rgba(212,175,55,0.3)]">
+                <path d="M20 35C18 45 15 55 16 62C17 70 25 75 40 75C55 75 63 70 64 62C65 55 62 45 60 35C58 28 52 25 40 25C28 25 22 28 20 35Z" fill="url(#bagGradient)" stroke="#c9a84c" strokeWidth="1.5" />
+                <path d="M30 25C30 25 33 20 40 20C47 20 50 25 50 25" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" />
+                <ellipse cx="40" cy="18" rx="6" ry="4" fill="#d4af37" stroke="#c9a84c" strokeWidth="1" />
+                <path d="M36 15C38 10 42 10 44 15" fill="none" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" />
+                <text x="40" y="55" textAnchor="middle" fill="#1e3a5f" fontSize="22" fontWeight="bold" fontFamily="serif">€</text>
+                <ellipse cx="30" cy="40" rx="4" ry="8" fill="rgba(255,255,255,0.15)" transform="rotate(-15 30 40)" />
+                <defs>
+                  <linearGradient id="bagGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#e6c252" />
+                    <stop offset="50%" stopColor="#d4af37" />
+                    <stop offset="100%" stopColor="#c9a84c" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gold-400 border border-gold-300 flex items-center justify-center text-[8px] font-bold text-atlantic-900 animate-bounce">€</div>
+            </div>
 
-              {/* Gauge */}
-              <div className="flex items-center gap-6">
-                <div className="text-right">
-                  <div className="text-4xl font-display font-bold animated-gold-text">
-                    <AnimatedCounter target={12.5} suffix="h" decimals={1} duration={2} />
-                  </div>
-                  <p className="text-xs font-sans text-atlantic-200/40">/ mois \u00e9conomis\u00e9es</p>
+            <div className="flex-1">
+              <h3 className="text-lg font-display font-semibold text-white flex items-center gap-2">
+                ROI FacturePro
+                <Sparkles className="w-4 h-4 text-gold-400" />
+              </h3>
+              <p className="text-sm font-sans text-atlantic-200/50 mt-1">
+                {stats.totalCA > 0
+                  ? `${formatCurrency(stats.totalCA)} encaissés • ${stats.sentReminders} relances envoyées`
+                  : "Commencez à facturer pour voir votre ROI"}
+              </p>
+            </div>
+
+            {/* Dynamic Gauge */}
+            <div className="flex items-center gap-6">
+              <div className="text-right">
+                <div className="text-4xl font-display font-bold animated-gold-text">
+                  <AnimatedCounter target={gaugeRate} suffix="%" duration={2} />
                 </div>
-                <div className="w-20 h-20 relative">
-                  <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
-                    <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(212,175,55,0.1)" strokeWidth="6" />
-                    <motion.circle
-                      cx="40" cy="40" r="34" fill="none" stroke="url(#gold-grad)" strokeWidth="6"
-                      strokeLinecap="round"
-                      strokeDasharray={`${2 * Math.PI * 34}`}
-                      initial={{ strokeDashoffset: 2 * Math.PI * 34 }}
-                      animate={{ strokeDashoffset: 2 * Math.PI * 34 * 0.25 }}
-                      transition={{ duration: 2, delay: 0.5, ease: "easeOut" }}
-                    />
-                    <defs>
-                      <linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#c9a84c" />
-                        <stop offset="100%" stopColor="#e6c252" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-sm font-sans font-bold text-gold-400">75%</span>
-                  </div>
+                <p className="text-xs font-sans text-atlantic-200/40">efficacité recouvrement</p>
+              </div>
+              <div className="w-24 h-24 relative">
+                <svg className="w-24 h-24 -rotate-90" viewBox="0 0 96 96">
+                  <circle cx="48" cy="48" r="40" fill="none" stroke="rgba(212,175,55,0.08)" strokeWidth="7" />
+                  <circle
+                    cx="48" cy="48" r="40" fill="none"
+                    stroke="url(#gaugeGrad)"
+                    strokeWidth="7"
+                    strokeLinecap="round"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={gaugeOffset}
+                    className="transition-all duration-[2s] ease-out"
+                  />
+                  {[0, 25, 50, 75, 100].map((tick) => {
+                    const angle = (tick / 100) * 360 - 90;
+                    const rad = (angle * Math.PI) / 180;
+                    const x1 = 48 + 34 * Math.cos(rad);
+                    const y1 = 48 + 34 * Math.sin(rad);
+                    const x2 = 48 + 37 * Math.cos(rad);
+                    const y2 = 48 + 37 * Math.sin(rad);
+                    return <line key={tick} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(212,175,55,0.3)" strokeWidth="1" />;
+                  })}
+                  <defs>
+                    <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#ef4444" />
+                      <stop offset="40%" stopColor="#f59e0b" />
+                      <stop offset="70%" stopColor="#c9a84c" />
+                      <stop offset="100%" stopColor="#22c55e" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Star className="w-5 h-5 text-gold-400 animate-pulse" />
                 </div>
               </div>
             </div>
-          </GlassCard>
-        </motion.div>
+          </div>
+        </GlassCard>
 
         {/* Charts + Activity */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Mini chart */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.5 }}
-            className="lg:col-span-2"
-          >
+          {/* CA Chart */}
+          <div className="lg:col-span-2">
             <GlassCard hover={false}>
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2">
                   <BarChart3 className="w-5 h-5 text-gold-400" />
-                  <h3 className="text-lg font-display font-semibold">
-                    \u00c9volution du CA
-                  </h3>
+                  <h3 className="text-lg font-display font-semibold">Évolution du CA</h3>
                 </div>
-                <span className="text-xs font-sans text-atlantic-200/40 px-3 py-1 rounded-full bg-atlantic-800/50">
-                  12 derniers mois
-                </span>
+                <span className="text-xs font-sans text-atlantic-200/40 px-3 py-1 rounded-full bg-atlantic-800/50">12 derniers mois</span>
               </div>
 
-              {/* Bar chart */}
-              <div className="flex items-end gap-2 h-48">
-                {monthlyData.map((val, i) => (
-                  <motion.div
-                    key={i}
-                    className="flex-1 relative group"
-                    initial={{ height: 0 }}
-                    animate={{ height: `${(val / maxData) * 100}%` }}
-                    transition={{ duration: 0.8, delay: 0.6 + i * 0.05, ease: [0.22, 1, 0.36, 1] }}
-                  >
-                    <div className="absolute inset-0 rounded-t-md bg-gradient-to-t from-gold-400/40 to-gold-400/10 group-hover:from-gold-400/60 group-hover:to-gold-400/20 transition-colors duration-300" />
-                    {/* Tooltip */}
-                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-atlantic-800 text-gold-400 text-xs font-sans px-2 py-1 rounded whitespace-nowrap">
-                      {val}k\u20ac
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-              <div className="flex gap-2 mt-2">
-                {["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"].map((m, i) => (
-                  <div key={i} className="flex-1 text-center text-[10px] font-sans text-atlantic-200/30">{m}</div>
-                ))}
-              </div>
+              {stats.monthlyCA.every((v) => v === 0) ? (
+                <div className="h-48 flex items-center justify-center">
+                  <p className="text-sm font-sans text-atlantic-200/30">Les données apparaîtront avec vos premiers paiements</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-end gap-2 h-48">
+                    {stats.monthlyCA.map((val, i) => (
+                      <div
+                        key={i}
+                        className="flex-1 relative group"
+                        style={{ height: maxCA > 0 ? `${(val / maxCA) * 100}%` : "0%" }}
+                      >
+                        <div className="absolute inset-0 rounded-t-md bg-gradient-to-t from-gold-400/40 to-gold-400/10 group-hover:from-gold-400/60 group-hover:to-gold-400/20 transition-colors duration-300" />
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-atlantic-800 text-gold-400 text-xs font-sans px-2 py-1 rounded whitespace-nowrap">
+                          {formatCurrency(val)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    {displayMonths.map((m, i) => (
+                      <div key={i} className="flex-1 text-center text-[10px] font-sans text-atlantic-200/30">{m}</div>
+                    ))}
+                  </div>
+                </>
+              )}
             </GlassCard>
-          </motion.div>
+          </div>
 
-          {/* Recent Activity */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.6 }}
-          >
+          {/* Recent Documents */}
+          <div>
             <GlassCard hover={false} className="h-full">
               <div className="flex items-center gap-2 mb-5">
                 <Clock className="w-5 h-5 text-gold-400" />
-                <h3 className="text-lg font-display font-semibold">
-                  Activit\u00e9 r\u00e9cente
-                </h3>
+                <h3 className="text-lg font-display font-semibold">Documents récents</h3>
               </div>
-              <div className="space-y-3">
-                {recentActivity.map((a, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, x: 10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.8 + i * 0.1 }}
-                    className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-atlantic-700/30 transition-colors cursor-pointer group"
-                  >
-                    <a.icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${a.color}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-sans text-atlantic-200/70 group-hover:text-white transition-colors leading-relaxed truncate">
-                        {a.text}
-                      </p>
-                      <p className="text-[10px] font-sans text-atlantic-200/30 mt-0.5">
-                        {a.time}
-                      </p>
+              {recentDocs.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-sm font-sans text-atlantic-200/30">Aucun document</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {recentDocs.map((doc) => {
+                    const statusColors: Record<string, string> = {
+                      brouillon: "text-atlantic-200/50",
+                      valide: "text-blue-400",
+                      envoye: "text-amber-400",
+                      paye: "text-emerald-400",
+                      annule: "text-red-400",
+                      refuse: "text-red-400",
+                    };
+                    return (
+                      <div
+                        key={doc.id}
+                        className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-atlantic-700/30 transition-colors"
+                      >
+                        <FileText className={`w-4 h-4 flex-shrink-0 ${statusColors[doc.status] || "text-atlantic-200/50"}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-sans text-atlantic-200/70 truncate">
+                            {doc.number} • {getClientName(doc.client_id)}
+                          </p>
+                          <p className="text-[10px] font-sans text-atlantic-200/30">{doc.status}</p>
+                        </div>
+                        <p className="text-xs font-sans font-medium text-gold-400">{formatCurrency(doc.total_ttc)}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </GlassCard>
+          </div>
+        </div>
+
+        {/* Gamification Section */}
+        <GlassCard hover={false}>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <Award className="w-5 h-5 text-gold-400" />
+              <h3 className="text-lg font-display font-semibold">Votre progression</h3>
+            </div>
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r ${levelColors.bg} border ${levelColors.border}`}>
+              <Crown className={`w-3.5 h-3.5 ${levelColors.text}`} />
+              <span className={`text-xs font-sans font-semibold uppercase tracking-wider ${levelColors.text}`}>
+                {gamification.level}
+              </span>
+            </div>
+          </div>
+
+          {/* Points + Progress bar */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-sans text-atlantic-200/60">
+                <span className="text-2xl font-display font-bold text-white">{gamification.points}</span> points
+              </p>
+              <p className="text-xs font-sans text-atlantic-200/40">
+                Prochain : {gamification.nextLevelPoints} pts
+              </p>
+            </div>
+            <div className="h-3 bg-atlantic-800/50 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-gold-400/60 to-gold-400 transition-all duration-[1.5s] ease-out"
+                style={{ width: `${gamification.progress}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Badges */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            {gamification.badges.map((badge) => {
+              const IconComp = BADGE_ICONS[badge.icon] || Star;
+              return (
+                <div
+                  key={badge.id}
+                  className={`relative flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${
+                    badge.earned
+                      ? "bg-gold-400/[0.06] border-gold-400/20 hover:border-gold-400/40"
+                      : "bg-atlantic-800/20 border-atlantic-600/10 opacity-40"
+                  }`}
+                >
+                  <div className={`p-2 rounded-lg ${badge.earned ? "bg-gold-400/15" : "bg-atlantic-700/30"}`}>
+                    <IconComp className={`w-4 h-4 ${badge.earned ? "text-gold-400" : "text-atlantic-200/30"}`} />
+                  </div>
+                  <div className="text-center">
+                    <p className={`text-[10px] font-sans font-medium ${badge.earned ? "text-white" : "text-atlantic-200/30"}`}>
+                      {badge.name}
+                    </p>
+                    <p className="text-[9px] font-sans text-atlantic-200/30 leading-tight mt-0.5">{badge.description}</p>
+                  </div>
+                  {badge.earned && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 flex items-center justify-center">
+                      <CheckCircle2 className="w-3 h-3 text-white" />
                     </div>
-                  </motion.div>
-                ))}
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </GlassCard>
+
+        {/* Quick Stats Row */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: "Devis", value: stats.quoteCount, icon: FileText, desc: `${stats.quoteConversion}% conversion` },
+            { label: "Produits", value: stats.productCount, icon: Package, desc: "dans le catalogue" },
+            { label: "Relances", value: stats.reminderCount, icon: Bell, desc: `${stats.sentReminders} envoyées` },
+            { label: "Badges", value: earnedBadges.length, icon: Trophy, desc: `/ ${gamification.badges.length} disponibles` },
+          ].map((stat) => (
+            <GlassCard key={stat.label} className="!p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-gold-400/10">
+                  <stat.icon className="w-4 h-4 text-gold-400/60" />
+                </div>
+                <div>
+                  <p className="text-xl font-display font-bold text-white">{stat.value}</p>
+                  <p className="text-[10px] font-sans text-atlantic-200/40">{stat.label} • {stat.desc}</p>
+                </div>
               </div>
             </GlassCard>
-          </motion.div>
+          ))}
         </div>
       </div>
     </PageTransition>

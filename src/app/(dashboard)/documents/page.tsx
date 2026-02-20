@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { Topbar } from "@/components/dashboard/topbar";
 import { GlassCard } from "@/components/premium/glass-card";
 import { PremiumButton } from "@/components/premium/premium-button";
@@ -10,14 +9,14 @@ import { PageTransition } from "@/components/premium/page-transition";
 import {
   FileText, Plus, Search, Edit2, Trash2, Eye, Send, Check, X,
   ChevronRight, Receipt, FileCheck, ArrowRight, ShieldCheck, AlertTriangle,
-  CheckCircle2, XCircle, MessageSquare, Clock,
+  CheckCircle2, XCircle, MessageSquare, Clock, Printer, Download,
 } from "lucide-react";
 import {
   getDocuments, saveDocument, deleteDocument, deleteDocumentLines,
   getDocumentLines, saveDocumentLine, deleteDocumentLine,
   getClients, getProducts, generateDocumentNumber,
   verifyDocument, addDocumentValidation, getDocumentValidations,
-  addAuditLog,
+  addAuditLog, getOrganization, getClient,
 } from "@/lib/local-storage";
 import type { VerificationResult, LocalValidation } from "@/lib/local-storage";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
@@ -93,7 +92,6 @@ export default function DocumentsPage() {
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [documents, search, filterType]);
 
-  // Totals calculation
   const totals = useMemo(() => {
     let ht = 0, tva = 0, ttc = 0;
     lines.forEach((line) => {
@@ -184,7 +182,6 @@ export default function DocumentsPage() {
       status: "brouillon",
     });
 
-    // Save lines
     if (editingDocId) deleteDocumentLines(editingDocId);
     lines.forEach((line, i) => {
       if (!line.description) return;
@@ -235,194 +232,290 @@ export default function DocumentsPage() {
     <PageTransition>
       <Topbar title="Documents" subtitle={`${documents.length} document${documents.length > 1 ? "s" : ""}`} />
       <div className="p-6">
-        <AnimatePresence mode="wait">
-          {/* ═══ LIST ═══ */}
-          {view === "list" && (
-            <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="flex gap-1 p-1 rounded-lg bg-atlantic-800/30">
-                    {(["all", "facture", "devis", "avoir"] as const).map((t) => (
-                      <button key={t} onClick={() => setFilterType(t)} className={`px-3 py-1.5 rounded-md text-xs font-sans transition-all ${filterType === t ? "bg-gold-400/10 text-gold-400 border border-gold-400/20" : "text-atlantic-200/40 hover:text-white"}`}>
-                        {t === "all" ? "Tous" : t.charAt(0).toUpperCase() + t.slice(1) + "s"}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-atlantic-200/30" />
-                    <input type="text" placeholder="N° document..." value={search} onChange={(e) => setSearch(e.target.value)} className="premium-input pl-10 text-sm w-44" />
-                  </div>
+        {/* ═══ LIST ═══ */}
+        {view === "list" && (
+          <div>
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="flex gap-1 p-1 rounded-lg bg-atlantic-800/30">
+                  {(["all", "facture", "devis", "avoir"] as const).map((t) => (
+                    <button key={t} onClick={() => setFilterType(t)} className={`px-3 py-1.5 rounded-md text-xs font-sans transition-all ${filterType === t ? "bg-gold-400/10 text-gold-400 border border-gold-400/20" : "text-atlantic-200/40 hover:text-white"}`}>
+                      {t === "all" ? "Tous" : t.charAt(0).toUpperCase() + t.slice(1) + "s"}
+                    </button>
+                  ))}
                 </div>
-                <div className="flex gap-2">
-                  <PremiumButton variant="outline" size="sm" icon={<FileCheck className="w-4 h-4" />} onClick={() => openCreate("devis")}>Devis</PremiumButton>
-                  <PremiumButton size="sm" icon={<Receipt className="w-4 h-4" />} onClick={() => openCreate("facture")}>Facture</PremiumButton>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-atlantic-200/30" />
+                  <input type="text" placeholder="N° document..." value={search} onChange={(e) => setSearch(e.target.value)} className="premium-input pl-10 text-sm w-44" />
                 </div>
               </div>
+              <div className="flex gap-2">
+                <PremiumButton variant="outline" size="sm" icon={<FileCheck className="w-4 h-4" />} onClick={() => openCreate("devis")}>Devis</PremiumButton>
+                <PremiumButton size="sm" icon={<Receipt className="w-4 h-4" />} onClick={() => openCreate("facture")}>Facture</PremiumButton>
+              </div>
+            </div>
 
-              {filtered.length === 0 ? (
-                <GlassCard hover={false} className="py-20">
-                  <div className="text-center">
-                    <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }} className="inline-block">
-                      <div className="w-20 h-20 rounded-2xl bg-gold-400/10 flex items-center justify-center mx-auto mb-6"><FileText className="w-10 h-10 text-gold-400/40" /></div>
-                    </motion.div>
-                    <h3 className="text-xl font-display font-semibold text-white mb-2">Aucun document</h3>
-                    <p className="text-sm font-sans text-atlantic-200/40">Créez votre première facture ou devis</p>
+            {filtered.length === 0 ? (
+              <GlassCard hover={false} className="py-20">
+                <div className="text-center">
+                  <div className="inline-block animate-float">
+                    <div className="w-20 h-20 rounded-2xl bg-gold-400/10 flex items-center justify-center mx-auto mb-6"><FileText className="w-10 h-10 text-gold-400/40" /></div>
+                  </div>
+                  <h3 className="text-xl font-display font-semibold text-white mb-2">Aucun document</h3>
+                  <p className="text-sm font-sans text-atlantic-200/40">Créez votre première facture ou devis</p>
+                </div>
+              </GlassCard>
+            ) : (
+              <div className="space-y-2">
+                {filtered.map((doc) => {
+                  const st = STATUS_LABELS[doc.status] || STATUS_LABELS.brouillon;
+                  return (
+                    <div key={doc.id} onClick={() => openDetail(doc)} className="flex items-center gap-4 p-4 rounded-xl border border-gold-400/5 bg-atlantic-800/20 hover:border-gold-400/20 hover:bg-atlantic-800/30 transition-all cursor-pointer group">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-sans font-bold ${doc.type === "facture" ? "bg-emerald-400/10 text-emerald-400" : doc.type === "devis" ? "bg-blue-400/10 text-blue-400" : "bg-amber-400/10 text-amber-400"}`}>
+                        {doc.type === "facture" ? "FAC" : doc.type === "devis" ? "DEV" : "AVO"}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-sans font-medium text-white">{doc.number}</p>
+                        <p className="text-xs font-sans text-atlantic-200/40">{getClientName(doc.client_id)} • {formatDateShort(doc.date)}</p>
+                      </div>
+                      <span className={`text-[10px] font-sans px-2 py-0.5 rounded-full ${st.color}`}>{st.label}</span>
+                      <p className="text-sm font-sans font-semibold text-gold-400">{formatCurrency(doc.total_ttc)}</p>
+                      <ChevronRight className="w-4 h-4 text-atlantic-200/20 group-hover:text-gold-400/50 transition-colors" />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══ CREATE / EDIT ═══ */}
+        {view === "create" && (
+          <div>
+            <button onClick={() => setView("list")} className="flex items-center gap-1 text-sm font-sans text-atlantic-200/40 hover:text-gold-400 transition-colors mb-4">← Retour</button>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-4">
+                <GlassCard hover={false}>
+                  <h3 className="text-lg font-display font-semibold mb-4">
+                    {docType === "facture" ? "Nouvelle facture" : "Nouveau devis"}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-sans font-medium text-gold-300 mb-2">Client *</label>
+                      <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="premium-input w-full text-sm">
+                        <option value="">Sélectionner un client</option>
+                        {clients.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.company_name || `${c.first_name || ""} ${c.last_name || ""}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <PremiumInput label="Date" type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} />
+                    <PremiumInput label="Échéance" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                    <PremiumInput label="Remise globale (%)" type="number" value={String(discountPercent)} onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)} />
                   </div>
                 </GlassCard>
-              ) : (
-                <div className="space-y-2">
-                  {filtered.map((doc, i) => {
-                    const st = STATUS_LABELS[doc.status] || STATUS_LABELS.brouillon;
-                    return (
-                      <motion.div key={doc.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }} onClick={() => openDetail(doc)} className="flex items-center gap-4 p-4 rounded-xl border border-gold-400/5 bg-atlantic-800/20 hover:border-gold-400/20 hover:bg-atlantic-800/30 transition-all cursor-pointer group">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-sans font-bold ${doc.type === "facture" ? "bg-emerald-400/10 text-emerald-400" : doc.type === "devis" ? "bg-blue-400/10 text-blue-400" : "bg-amber-400/10 text-amber-400"}`}>
-                          {doc.type === "facture" ? "FAC" : doc.type === "devis" ? "DEV" : "AVO"}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-sans font-medium text-white">{doc.number}</p>
-                          <p className="text-xs font-sans text-atlantic-200/40">{getClientName(doc.client_id)} • {formatDateShort(doc.date)}</p>
-                        </div>
-                        <span className={`text-[10px] font-sans px-2 py-0.5 rounded-full ${st.color}`}>{st.label}</span>
-                        <p className="text-sm font-sans font-semibold text-gold-400">{formatCurrency(doc.total_ttc)}</p>
-                        <ChevronRight className="w-4 h-4 text-atlantic-200/20 group-hover:text-gold-400/50 transition-colors" />
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              )}
-            </motion.div>
-          )}
 
-          {/* ═══ CREATE / EDIT ═══ */}
-          {view === "create" && (
-            <motion.div key="create" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-              <button onClick={() => setView("list")} className="flex items-center gap-1 text-sm font-sans text-atlantic-200/40 hover:text-gold-400 transition-colors mb-4">← Retour</button>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Main form */}
-                <div className="lg:col-span-2 space-y-4">
-                  <GlassCard hover={false}>
-                    <h3 className="text-lg font-display font-semibold mb-4">
-                      {docType === "facture" ? "Nouvelle facture" : "Nouveau devis"}
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-sans font-medium text-gold-300 mb-2">Client *</label>
-                        <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="premium-input w-full text-sm">
-                          <option value="">Sélectionner un client</option>
-                          {clients.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.company_name || `${c.first_name || ""} ${c.last_name || ""}`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <PremiumInput label="Date" type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} />
-                      <PremiumInput label="Échéance" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-                      <PremiumInput label="Remise globale (%)" type="number" value={String(discountPercent)} onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)} />
-                    </div>
-                  </GlassCard>
-
-                  {/* Lines */}
-                  <GlassCard hover={false}>
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-display font-semibold">Lignes</h3>
-                      <PremiumButton variant="ghost" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={addLine}>Ligne</PremiumButton>
-                    </div>
-                    <div className="space-y-3">
-                      {lines.map((line, idx) => (
-                        <motion.div key={idx} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-3 rounded-lg bg-atlantic-800/20 border border-gold-400/5 space-y-3">
-                          <div className="flex gap-2">
-                            {products.length > 0 && (
-                              <select value={line.product_id || ""} onChange={(e) => selectProduct(idx, e.target.value)} className="premium-input text-xs w-40">
-                                <option value="">Catalogue...</option>
-                                {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                              </select>
-                            )}
-                            <input type="text" placeholder="Description *" value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} className="premium-input text-sm flex-1" />
-                            {lines.length > 1 && (
-                              <button onClick={() => removeLine(idx)} className="text-atlantic-200/30 hover:text-red-400 transition-colors p-1"><X className="w-4 h-4" /></button>
-                            )}
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                            <input type="number" step="0.001" placeholder="Qté" value={line.quantity || ""} onChange={(e) => updateLine(idx, "quantity", parseFloat(e.target.value) || 0)} className="premium-input text-sm" />
-                            <select value={line.unit} onChange={(e) => updateLine(idx, "unit", e.target.value)} className="premium-input text-sm">
-                              {["unité","heure","jour","forfait","m²","kg","litre","lot"].map((u) => <option key={u} value={u}>{u}</option>)}
-                            </select>
-                            <input type="number" step="0.01" placeholder="Prix HT" value={line.unit_price || ""} onChange={(e) => updateLine(idx, "unit_price", parseFloat(e.target.value) || 0)} className="premium-input text-sm" />
-                            <select value={line.tva_rate} onChange={(e) => updateLine(idx, "tva_rate", parseFloat(e.target.value))} className="premium-input text-sm">
-                              <option value={0}>0%</option><option value={5.5}>5.5%</option><option value={10}>10%</option><option value={20}>20%</option>
-                            </select>
-                            <div className="text-right text-sm font-sans font-semibold text-gold-400 flex items-center justify-end">
-                              {formatCurrency(calcLine(line).total_ttc)}
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </GlassCard>
-
-                  <div className="mt-4">
-                    <label className="block text-sm font-sans font-medium text-gold-300 mb-2">Notes / Conditions</label>
-                    <textarea placeholder="Conditions de paiement, mentions particulières..." value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="premium-input w-full resize-none" />
+                <GlassCard hover={false}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-display font-semibold">Lignes</h3>
+                    <PremiumButton variant="ghost" size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={addLine}>Ligne</PremiumButton>
                   </div>
-                </div>
-
-                {/* Sidebar totals */}
-                <div>
-                  <div className="sticky top-24">
-                    <GlassCard hover={false} glow>
-                      <h3 className="text-lg font-display font-semibold mb-4">Récapitulatif</h3>
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-sm font-sans">
-                          <span className="text-atlantic-200/50">Total HT</span>
-                          <span className="text-white">{formatCurrency(totals.ht)}</span>
+                  <div className="space-y-3">
+                    {lines.map((line, idx) => (
+                      <div key={idx} className="p-3 rounded-lg bg-atlantic-800/20 border border-gold-400/5 space-y-3">
+                        <div className="flex gap-2">
+                          {products.length > 0 && (
+                            <select value={line.product_id || ""} onChange={(e) => selectProduct(idx, e.target.value)} className="premium-input text-xs w-40">
+                              <option value="">Catalogue...</option>
+                              {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                          )}
+                          <input type="text" placeholder="Description *" value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} className="premium-input text-sm flex-1" />
+                          {lines.length > 1 && (
+                            <button onClick={() => removeLine(idx)} className="text-atlantic-200/30 hover:text-red-400 transition-colors p-1"><X className="w-4 h-4" /></button>
+                          )}
                         </div>
-                        {totals.discount > 0 && (
-                          <div className="flex justify-between text-sm font-sans">
-                            <span className="text-atlantic-200/50">Remise ({discountPercent}%)</span>
-                            <span className="text-red-400">-{formatCurrency(totals.discount)}</span>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                          <input type="number" step="0.001" placeholder="Qté" value={line.quantity || ""} onChange={(e) => updateLine(idx, "quantity", parseFloat(e.target.value) || 0)} className="premium-input text-sm" />
+                          <select value={line.unit} onChange={(e) => updateLine(idx, "unit", e.target.value)} className="premium-input text-sm">
+                            {["unité","heure","jour","forfait","m²","kg","litre","lot"].map((u) => <option key={u} value={u}>{u}</option>)}
+                          </select>
+                          <input type="number" step="0.01" placeholder="Prix HT" value={line.unit_price || ""} onChange={(e) => updateLine(idx, "unit_price", parseFloat(e.target.value) || 0)} className="premium-input text-sm" />
+                          <select value={line.tva_rate} onChange={(e) => updateLine(idx, "tva_rate", parseFloat(e.target.value))} className="premium-input text-sm">
+                            <option value={0}>0%</option><option value={5.5}>5.5%</option><option value={10}>10%</option><option value={20}>20%</option>
+                          </select>
+                          <div className="text-right text-sm font-sans font-semibold text-gold-400 flex items-center justify-end">
+                            {formatCurrency(calcLine(line).total_ttc)}
                           </div>
-                        )}
-                        <div className="flex justify-between text-sm font-sans">
-                          <span className="text-atlantic-200/50">TVA</span>
-                          <span className="text-white">{formatCurrency(totals.tva)}</span>
-                        </div>
-                        <div className="border-t border-gold-400/20 pt-3 flex justify-between">
-                          <span className="text-base font-sans font-semibold text-gold-400">Total TTC</span>
-                          <span className="text-xl font-display font-bold animated-gold-text">{formatCurrency(totals.ttc)}</span>
                         </div>
                       </div>
-                      <div className="mt-6 space-y-2">
-                        <PremiumButton onClick={handleSaveDocument} className="w-full" icon={<Check className="w-4 h-4" />}>
-                          Enregistrer
-                        </PremiumButton>
-                        <PremiumButton variant="ghost" onClick={() => setView("list")} className="w-full">
-                          Annuler
-                        </PremiumButton>
-                      </div>
-                    </GlassCard>
+                    ))}
                   </div>
+                </GlassCard>
+
+                <div className="mt-4">
+                  <label className="block text-sm font-sans font-medium text-gold-300 mb-2">Notes / Conditions</label>
+                  <textarea placeholder="Conditions de paiement, mentions particulières..." value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="premium-input w-full resize-none" />
                 </div>
               </div>
-            </motion.div>
-          )}
 
-          {/* ═══ DETAIL ═══ */}
-          {view === "detail" && selectedDoc && (
-            <DocumentDetail
-              doc={selectedDoc}
-              lines={selectedLines}
-              getClientName={getClientName}
-              onBack={() => setView("list")}
-              onUpdateStatus={(s) => { updateStatus(selectedDoc, s); }}
-              onDelete={() => handleDeleteDoc(selectedDoc.id)}
-              onRefresh={() => { setDocuments(getDocuments()); setSelectedDoc(getDocuments().find(d => d.id === selectedDoc.id) || null); }}
-            />
-          )}
-        </AnimatePresence>
+              <div>
+                <div className="sticky top-24">
+                  <GlassCard hover={false} glow>
+                    <h3 className="text-lg font-display font-semibold mb-4">Récapitulatif</h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm font-sans">
+                        <span className="text-atlantic-200/50">Total HT</span>
+                        <span className="text-white">{formatCurrency(totals.ht)}</span>
+                      </div>
+                      {totals.discount > 0 && (
+                        <div className="flex justify-between text-sm font-sans">
+                          <span className="text-atlantic-200/50">Remise ({discountPercent}%)</span>
+                          <span className="text-red-400">-{formatCurrency(totals.discount)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm font-sans">
+                        <span className="text-atlantic-200/50">TVA</span>
+                        <span className="text-white">{formatCurrency(totals.tva)}</span>
+                      </div>
+                      <div className="border-t border-gold-400/20 pt-3 flex justify-between">
+                        <span className="text-base font-sans font-semibold text-gold-400">Total TTC</span>
+                        <span className="text-xl font-display font-bold animated-gold-text">{formatCurrency(totals.ttc)}</span>
+                      </div>
+                    </div>
+                    <div className="mt-6 space-y-2">
+                      <PremiumButton onClick={handleSaveDocument} className="w-full" icon={<Check className="w-4 h-4" />}>
+                        Enregistrer
+                      </PremiumButton>
+                      <PremiumButton variant="ghost" onClick={() => setView("list")} className="w-full">
+                        Annuler
+                      </PremiumButton>
+                    </div>
+                  </GlassCard>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ DETAIL ═══ */}
+        {view === "detail" && selectedDoc && (
+          <DocumentDetail
+            doc={selectedDoc}
+            lines={selectedLines}
+            getClientName={getClientName}
+            onBack={() => setView("list")}
+            onUpdateStatus={(s) => { updateStatus(selectedDoc, s); }}
+            onDelete={() => handleDeleteDoc(selectedDoc.id)}
+            onRefresh={() => { setDocuments(getDocuments()); setSelectedDoc(getDocuments().find(d => d.id === selectedDoc.id) || null); }}
+          />
+        )}
       </div>
     </PageTransition>
+  );
+}
+
+// ═══════════════════════════════════════════
+// Invoice Preview (PDF-like)
+// ═══════════════════════════════════════════
+
+function InvoicePreview({ doc, lines, clientName }: { doc: Doc; lines: DocumentLine[]; clientName: string }) {
+  const org = getOrganization();
+  const client = getClient(doc.client_id);
+  const typeLabels: Record<string, string> = { facture: "FACTURE", devis: "DEVIS", avoir: "AVOIR", bon_livraison: "BON DE LIVRAISON" };
+
+  function handlePrint() {
+    window.print();
+  }
+
+  return (
+    <div>
+      <div className="flex justify-end mb-3 print:hidden">
+        <button onClick={handlePrint} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-sans bg-gold-400/10 text-gold-400 hover:bg-gold-400/20 transition-colors">
+          <Printer className="w-3.5 h-3.5" /> Imprimer / PDF
+        </button>
+      </div>
+      <div className="bg-white text-gray-900 rounded-lg p-8 shadow-lg print:shadow-none print:p-0 text-[13px] leading-relaxed" id="invoice-preview">
+        <div className="flex justify-between items-start mb-8 border-b-2 border-amber-500 pb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">{org.name || "Votre Entreprise"}</h2>
+            {org.address && <p className="text-gray-500 mt-1">{org.address}</p>}
+            {(org.postal_code || org.city) && <p className="text-gray-500">{org.postal_code} {org.city}</p>}
+            {org.phone && <p className="text-gray-500">Tél : {org.phone}</p>}
+            {org.email && <p className="text-gray-500">{org.email}</p>}
+            {org.siret && <p className="text-gray-400 text-xs mt-2">SIRET : {org.siret}</p>}
+            {org.tva_number && <p className="text-gray-400 text-xs">TVA : {org.tva_number}</p>}
+          </div>
+          <div className="text-right">
+            <h1 className="text-3xl font-bold text-amber-600">{typeLabels[doc.type] || "DOCUMENT"}</h1>
+            <p className="text-lg font-semibold mt-1">{doc.number}</p>
+            <p className="text-gray-500 mt-2">Date : {formatDateShort(doc.date)}</p>
+            {doc.due_date && <p className="text-gray-500">Échéance : {formatDateShort(doc.due_date)}</p>}
+          </div>
+        </div>
+
+        <div className="mb-8 p-4 bg-gray-50 rounded-lg">
+          <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Destinataire</p>
+          <p className="font-semibold text-gray-900">{clientName}</p>
+          {client?.address && <p className="text-gray-600">{client.address}</p>}
+          {(client?.postal_code || client?.city) && <p className="text-gray-600">{client?.postal_code} {client?.city}</p>}
+          {client?.email && <p className="text-gray-500 text-xs mt-1">{client.email}</p>}
+          {client?.siret && <p className="text-gray-400 text-xs">SIRET : {client.siret}</p>}
+        </div>
+
+        <table className="w-full mb-6">
+          <thead>
+            <tr className="bg-gray-800 text-white text-xs uppercase">
+              <th className="text-left py-2.5 px-3 rounded-tl-lg">Description</th>
+              <th className="text-right py-2.5 px-3">Qté</th>
+              <th className="text-right py-2.5 px-3">P.U. HT</th>
+              <th className="text-right py-2.5 px-3">TVA</th>
+              <th className="text-right py-2.5 px-3 rounded-tr-lg">Total HT</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map((line, i) => (
+              <tr key={line.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                <td className="py-2.5 px-3 text-gray-900">{line.description}</td>
+                <td className="py-2.5 px-3 text-right text-gray-600">{line.quantity} {line.unit}</td>
+                <td className="py-2.5 px-3 text-right text-gray-600">{formatCurrency(line.unit_price)}</td>
+                <td className="py-2.5 px-3 text-right text-gray-600">{line.tva_rate}%</td>
+                <td className="py-2.5 px-3 text-right font-semibold text-gray-900">{formatCurrency(line.total_ht)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div className="flex justify-end">
+          <div className="w-72">
+            <div className="flex justify-between py-1.5 text-gray-600"><span>Total HT</span><span>{formatCurrency(doc.total_ht)}</span></div>
+            {doc.discount_amount > 0 && <div className="flex justify-between py-1.5 text-red-600"><span>Remise ({doc.discount_percent}%)</span><span>-{formatCurrency(doc.discount_amount)}</span></div>}
+            <div className="flex justify-between py-1.5 text-gray-600"><span>TVA</span><span>{formatCurrency(doc.total_tva)}</span></div>
+            <div className="flex justify-between py-2.5 border-t-2 border-amber-500 mt-2 text-lg font-bold text-gray-900">
+              <span>Total TTC</span><span>{formatCurrency(doc.total_ttc)}</span>
+            </div>
+          </div>
+        </div>
+
+        {doc.notes && (
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <p className="text-xs text-gray-400 mb-1">Notes / Conditions</p>
+            <p className="text-gray-600 whitespace-pre-line">{doc.notes}</p>
+          </div>
+        )}
+
+        <div className="mt-8 pt-4 border-t border-gray-200 text-[10px] text-gray-400 text-center space-y-0.5">
+          {org.name && <p>{org.name}{org.legal_form ? ` - ${org.legal_form}` : ""}{org.capital ? ` au capital de ${org.capital}€` : ""}</p>}
+          {org.rcs && <p>RCS {org.rcs}</p>}
+          {org.siret && <p>SIRET {org.siret} — TVA {org.tva_number || "N/A"}</p>}
+          {(org.rib_iban || org.rib_bic) && <p>IBAN : {org.rib_iban || "—"} — BIC : {org.rib_bic || "—"}</p>}
+          <p className="mt-2">En cas de retard de paiement, une pénalité de 3x le taux d&apos;intérêt légal sera appliquée, ainsi qu&apos;une indemnité forfaitaire de 40€ pour frais de recouvrement.</p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -443,6 +536,7 @@ function DocumentDetail({ doc, lines, getClientName, onBack, onUpdateStatus, onD
   const [validations, setValidations] = useState<LocalValidation[]>([]);
   const [validationComment, setValidationComment] = useState("");
   const [showValidation, setShowValidation] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     setVerification(verifyDocument(doc.id));
@@ -464,11 +558,10 @@ function DocumentDetail({ doc, lines, getClientName, onBack, onUpdateStatus, onD
   const st = STATUS_LABELS[doc.status] || STATUS_LABELS.brouillon;
 
   return (
-    <motion.div key="detail" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+    <div>
       <button onClick={onBack} className="flex items-center gap-1 text-sm font-sans text-atlantic-200/40 hover:text-gold-400 transition-colors mb-4">← Retour</button>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main content */}
         <div className="lg:col-span-2 space-y-4">
           <GlassCard hover={false}>
             <div className="flex items-start justify-between mb-6">
@@ -494,11 +587,17 @@ function DocumentDetail({ doc, lines, getClientName, onBack, onUpdateStatus, onD
                 {doc.status === "envoye" && (
                   <PremiumButton size="sm" icon={<Check className="w-3.5 h-3.5" />} onClick={() => onUpdateStatus("paye")}>Payé</PremiumButton>
                 )}
+                <PremiumButton variant="outline" size="sm" icon={<Printer className="w-3.5 h-3.5" />} onClick={() => setShowPreview(!showPreview)}>
+                  {showPreview ? "Données" : "Aperçu"}
+                </PremiumButton>
                 <PremiumButton variant="ghost" size="sm" onClick={onDelete} className="text-red-400 hover:bg-red-400/10"><Trash2 className="w-3.5 h-3.5" /></PremiumButton>
               </div>
             </div>
 
-            {/* Lines table */}
+            {showPreview ? (
+              <InvoicePreview doc={doc} lines={lines} clientName={getClientName(doc.client_id)} />
+            ) : (
+            <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm font-sans">
                 <thead>
@@ -524,7 +623,6 @@ function DocumentDetail({ doc, lines, getClientName, onBack, onUpdateStatus, onD
               </table>
             </div>
 
-            {/* Totals */}
             <div className="mt-6 flex justify-end">
               <div className="w-64 space-y-2">
                 <div className="flex justify-between text-sm"><span className="text-atlantic-200/50">Total HT</span><span>{formatCurrency(doc.total_ht)}</span></div>
@@ -540,12 +638,12 @@ function DocumentDetail({ doc, lines, getClientName, onBack, onUpdateStatus, onD
                 <p className="text-sm font-sans text-atlantic-200/60">{doc.notes}</p>
               </div>
             )}
+            </>
+            )}
           </GlassCard>
         </div>
 
-        {/* Sidebar: Verification + Validation */}
         <div className="space-y-4">
-          {/* Auto-verification */}
           {verification && (
             <GlassCard hover={false}>
               <div className="flex items-center gap-2 mb-4">
@@ -577,38 +675,32 @@ function DocumentDetail({ doc, lines, getClientName, onBack, onUpdateStatus, onD
             </GlassCard>
           )}
 
-          {/* Validation N+1 Panel */}
-          <AnimatePresence>
-            {showValidation && (
-              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-                <GlassCard hover={false} glow>
-                  <h4 className="text-sm font-sans font-semibold text-gold-400 mb-3 flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4" /> Validation N+1
-                  </h4>
-                  <textarea
-                    placeholder="Commentaire (optionnel)..."
-                    value={validationComment}
-                    onChange={(e) => setValidationComment(e.target.value)}
-                    rows={2}
-                    className="premium-input w-full text-sm resize-none mb-3"
-                  />
-                  <div className="flex gap-2">
-                    <PremiumButton size="sm" onClick={() => handleValidate("approve")} icon={<CheckCircle2 className="w-3.5 h-3.5" />} className="flex-1">
-                      Approuver
-                    </PremiumButton>
-                    <button onClick={() => handleValidate("reject")} className="flex-1 px-3 py-2 rounded-lg text-xs font-sans bg-red-400/10 text-red-400 hover:bg-red-400/20 transition-colors">
-                      Rejeter
-                    </button>
-                  </div>
-                  <button onClick={() => handleValidate("request_changes")} className="w-full mt-2 px-3 py-2 rounded-lg text-xs font-sans text-atlantic-200/50 hover:text-amber-400 hover:bg-amber-400/10 transition-colors">
-                    Demander des modifications
-                  </button>
-                </GlassCard>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {showValidation && (
+            <GlassCard hover={false} glow>
+              <h4 className="text-sm font-sans font-semibold text-gold-400 mb-3 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4" /> Validation N+1
+              </h4>
+              <textarea
+                placeholder="Commentaire (optionnel)..."
+                value={validationComment}
+                onChange={(e) => setValidationComment(e.target.value)}
+                rows={2}
+                className="premium-input w-full text-sm resize-none mb-3"
+              />
+              <div className="flex gap-2">
+                <PremiumButton size="sm" onClick={() => handleValidate("approve")} icon={<CheckCircle2 className="w-3.5 h-3.5" />} className="flex-1">
+                  Approuver
+                </PremiumButton>
+                <button onClick={() => handleValidate("reject")} className="flex-1 px-3 py-2 rounded-lg text-xs font-sans bg-red-400/10 text-red-400 hover:bg-red-400/20 transition-colors">
+                  Rejeter
+                </button>
+              </div>
+              <button onClick={() => handleValidate("request_changes")} className="w-full mt-2 px-3 py-2 rounded-lg text-xs font-sans text-atlantic-200/50 hover:text-amber-400 hover:bg-amber-400/10 transition-colors">
+                Demander des modifications
+              </button>
+            </GlassCard>
+          )}
 
-          {/* Validation history */}
           {validations.length > 0 && (
             <GlassCard hover={false}>
               <h4 className="text-sm font-sans font-semibold text-white mb-3 flex items-center gap-2">
@@ -634,6 +726,6 @@ function DocumentDetail({ doc, lines, getClientName, onBack, onUpdateStatus, onD
           )}
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

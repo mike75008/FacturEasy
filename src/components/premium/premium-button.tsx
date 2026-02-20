@@ -1,7 +1,6 @@
 "use client";
 
 import { forwardRef, type ButtonHTMLAttributes } from "react";
-import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
@@ -27,24 +26,23 @@ export const PremiumButton = forwardRef<HTMLButtonElement, PremiumButtonProps>(
     };
 
     return (
-      <motion.button
+      <button
         ref={ref}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
         className={cn(
           variants[variant],
           sizes[size],
+          "hover:scale-[1.02] active:scale-[0.98] transition-transform duration-150",
           (disabled || loading) && "opacity-50 cursor-not-allowed",
           className
         )}
         disabled={disabled || loading}
-        {...(props as React.ComponentProps<typeof motion.button>)}
+        {...props}
       >
         <span className="flex items-center justify-center gap-2">
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
           {children}
         </span>
-      </motion.button>
+      </button>
     );
   }
 );

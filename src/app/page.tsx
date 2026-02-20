@@ -1,6 +1,5 @@
 "use client";
 
-import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
 import Link from "next/link";
 import {
@@ -15,7 +14,6 @@ import { AnimatedCounter } from "@/components/premium/animated-counter";
 import { FloatingParticles } from "@/components/premium/floating-particles";
 import { PremiumButton } from "@/components/premium/premium-button";
 
-/* ─── DATA ─── */
 const features = [
   { icon: FileText, title: "Facturation Universelle", desc: "Devis, factures, avoirs, bons de livraison avec numérotation séquentielle légale sans faille." },
   { icon: Users, title: "CRM Intégré", desc: "Gestion clients avec scoring comportemental, badges de fidélité et timeline d'interactions." },
@@ -45,74 +43,38 @@ const testimonials = [
   { name: "Sophie Martin", role: "Artisan plombier", text: "Enfin un outil qui comprend mon métier. Les unités personnalisables changent tout.", rating: 5 },
 ];
 
-/* ─── COMPONENT ─── */
 export default function HomePage() {
-  const heroRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: heroRef,
-    offset: ["start start", "end start"],
-  });
-  const heroY = useTransform(scrollYProgress, [0, 1], [0, 150]);
-  const heroOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
-
   return (
     <div className="relative">
       <AnimatedBackground />
 
       {/* ═══ HERO ═══ */}
-      <section ref={heroRef} className="relative min-h-screen flex flex-col items-center justify-center px-4">
+      <section className="relative min-h-screen flex flex-col items-center justify-center px-4">
         <FloatingParticles count={30} />
 
-        <motion.div
-          style={{ y: heroY, opacity: heroOpacity }}
-          className="text-center max-w-5xl mx-auto relative z-10"
-        >
-          {/* Badge */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-gold-400/10 border border-gold-400/20 mb-8"
-          >
+        <div className="text-center max-w-5xl mx-auto relative z-10">
+          <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-gold-400/10 border border-gold-400/20 mb-8">
             <Sparkles className="w-4 h-4 text-gold-400" />
             <span className="text-sm font-sans font-medium text-gold-400">
               Propulsé par l&apos;Intelligence Artificielle
             </span>
-          </motion.div>
+          </div>
 
-          {/* Title */}
-          <motion.h1
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="text-5xl md:text-6xl lg:text-7xl font-display font-bold leading-[1.1] mb-6"
-          >
+          <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-bold leading-[1.1] mb-6">
             La facturation
             <br />
             <span className="animated-gold-text">haut de gamme</span>
             <br />
             pour les professionnels
-          </motion.h1>
+          </h1>
 
-          {/* Subtitle */}
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.4 }}
-            className="text-xl md:text-2xl text-atlantic-200/70 font-body max-w-3xl mx-auto mb-10"
-          >
+          <p className="text-xl md:text-2xl text-atlantic-200/70 font-body max-w-3xl mx-auto mb-10">
             Solution tout-en-un avec IA intégrée, conformité légale française automatique
             et design premium pour une expérience sans compromis.
-          </motion.p>
+          </p>
 
-          {/* CTAs */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.6 }}
-            className="flex flex-col sm:flex-row gap-4 justify-center items-center"
-          >
-            <Link href="/register">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <Link href="/dashboard">
               <PremiumButton size="lg" icon={<Zap className="w-5 h-5" />}>
                 Démarrer gratuitement
               </PremiumButton>
@@ -122,61 +84,33 @@ export default function HomePage() {
                 Explorer la démo
               </PremiumButton>
             </Link>
-          </motion.div>
+          </div>
 
-          {/* Trust badges */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1, duration: 0.8 }}
-            className="flex items-center justify-center gap-6 mt-10 text-atlantic-200/40 text-xs font-sans"
-          >
+          <div className="flex items-center justify-center gap-6 mt-10 text-atlantic-200/40 text-xs font-sans">
             <span className="flex items-center gap-1.5"><Lock className="w-3.5 h-3.5" /> Données chiffrées</span>
             <span className="w-1 h-1 rounded-full bg-gold-400/30" />
             <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5" /> Conforme NF525</span>
             <span className="w-1 h-1 rounded-full bg-gold-400/30" />
             <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> Setup en 2 min</span>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
 
-        {/* Scroll indicator */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.5 }}
-          className="absolute bottom-8 left-1/2 -translate-x-1/2"
-        >
-          <motion.div
-            animate={{ y: [0, 8, 0] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          >
-            <ChevronDown className="w-6 h-6 text-gold-400/40" />
-          </motion.div>
-        </motion.div>
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+          <ChevronDown className="w-6 h-6 text-gold-400/40" />
+        </div>
       </section>
 
       {/* ═══ STATS BAR ═══ */}
       <section className="relative py-16 border-y border-gold-400/10">
         <div className="max-w-6xl mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {stats.map((stat, i) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="text-center"
-              >
+            {stats.map((stat) => (
+              <div key={stat.label} className="text-center">
                 <div className="text-4xl md:text-5xl font-display font-bold gold-text mb-2">
-                  <AnimatedCounter
-                    target={stat.value}
-                    suffix={stat.suffix}
-                    decimals={stat.decimals}
-                  />
+                  <AnimatedCounter target={stat.value} suffix={stat.suffix} decimals={stat.decimals} />
                 </div>
                 <p className="text-sm font-sans text-atlantic-200/50">{stat.label}</p>
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
@@ -191,19 +125,14 @@ export default function HomePage() {
             titleGold="rien de superflu"
             subtitle="Une suite complète d'outils pensée pour les professionnels exigeants qui veulent le meilleur."
           />
-
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-16">
-            {features.map((f, i) => (
-              <GlassCard key={f.title} delay={i * 0.1} className="group">
+            {features.map((f) => (
+              <GlassCard key={f.title} className="group">
                 <div className="p-3 rounded-xl bg-gold-400/10 w-fit mb-4 group-hover:bg-gold-400/20 transition-colors duration-300">
                   <f.icon className="w-6 h-6 text-gold-400" />
                 </div>
-                <h3 className="text-xl font-display font-semibold text-white mb-2">
-                  {f.title}
-                </h3>
-                <p className="text-sm font-sans text-atlantic-200/60 leading-relaxed">
-                  {f.desc}
-                </p>
+                <h3 className="text-xl font-display font-semibold text-white mb-2">{f.title}</h3>
+                <p className="text-sm font-sans text-atlantic-200/60 leading-relaxed">{f.desc}</p>
               </GlassCard>
             ))}
           </div>
@@ -219,28 +148,21 @@ export default function HomePage() {
             titleGold="1, 2, 3, 4"
             subtitle="De la création à l'encaissement, un parcours fluide et automatisé."
           />
-
           <div className="mt-16 space-y-6">
-            {workflow.map((w, i) => (
-              <motion.div
+            {workflow.map((w) => (
+              <div
                 key={w.step}
-                initial={{ opacity: 0, x: i % 2 === 0 ? -50 : 50 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.6, delay: i * 0.15, ease: [0.22, 1, 0.36, 1] }}
                 className="flex items-center gap-6 p-6 rounded-xl border border-gold-400/10 bg-atlantic-800/20 backdrop-blur-sm hover:border-gold-400/30 hover:bg-atlantic-800/30 transition-all duration-500 group"
               >
                 <div className="flex-shrink-0 w-16 h-16 rounded-2xl bg-gold-gradient flex items-center justify-center shadow-premium">
                   <span className="text-2xl font-display font-bold text-atlantic-900">{w.step}</span>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-xl font-display font-semibold text-white group-hover:text-gold-300 transition-colors">
-                    {w.title}
-                  </h3>
+                  <h3 className="text-xl font-display font-semibold text-white group-hover:text-gold-300 transition-colors">{w.title}</h3>
                   <p className="text-sm font-sans text-atlantic-200/60 mt-1">{w.desc}</p>
                 </div>
                 <w.icon className="w-8 h-8 text-gold-400/30 group-hover:text-gold-400/60 transition-colors flex-shrink-0" />
-              </motion.div>
+              </div>
             ))}
           </div>
         </div>
@@ -249,16 +171,10 @@ export default function HomePage() {
       {/* ═══ TESTIMONIALS ═══ */}
       <section className="relative py-24 px-4">
         <div className="max-w-6xl mx-auto">
-          <SectionHeading
-            badge="Témoignages"
-            title="Ils nous font"
-            titleGold="confiance"
-          />
-
+          <SectionHeading badge="Témoignages" title="Ils nous font" titleGold="confiance" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16">
-            {testimonials.map((t, i) => (
-              <GlassCard key={t.name} delay={i * 0.15} className="flex flex-col">
-                {/* Stars */}
+            {testimonials.map((t) => (
+              <GlassCard key={t.name} className="flex flex-col">
                 <div className="flex gap-1 mb-4">
                   {Array.from({ length: t.rating }).map((_, j) => (
                     <Star key={j} className="w-4 h-4 fill-gold-400 text-gold-400" />
@@ -281,14 +197,7 @@ export default function HomePage() {
       <section className="relative py-32 px-4">
         <div className="max-w-4xl mx-auto text-center relative">
           <FloatingParticles count={15} />
-
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
-            className="relative z-10 p-12 rounded-2xl border border-gold-400/20 bg-atlantic-800/30 backdrop-blur-xl shadow-premium-glow"
-          >
+          <div className="relative z-10 p-12 rounded-2xl border border-gold-400/20 bg-atlantic-800/30 backdrop-blur-xl shadow-premium-glow">
             <Bell className="w-12 h-12 text-gold-400 mx-auto mb-6 animate-float" />
             <h2 className="text-4xl md:text-5xl font-display font-bold text-white mb-4">
               Prêt à <span className="animated-gold-text">transformer</span>
@@ -299,7 +208,7 @@ export default function HomePage() {
               Configuration en 2 minutes, aucune carte bancaire requise.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/register">
+              <Link href="/dashboard">
                 <PremiumButton size="lg" icon={<Sparkles className="w-5 h-5" />}>
                   Créer mon compte gratuit
                 </PremiumButton>
@@ -310,7 +219,7 @@ export default function HomePage() {
                 </PremiumButton>
               </Link>
             </div>
-          </motion.div>
+          </div>
         </div>
       </section>
 
@@ -322,9 +231,7 @@ export default function HomePage() {
               <h3 className="font-display text-2xl font-bold mb-2">
                 <span className="gold-text">Facture</span><span className="text-white">Pro</span>
               </h3>
-              <p className="text-sm font-sans text-atlantic-200/50">
-                Facturation intelligente pour professionnels exigeants.
-              </p>
+              <p className="text-sm font-sans text-atlantic-200/50">Facturation intelligente pour professionnels exigeants.</p>
             </div>
             <div>
               <h4 className="font-sans font-semibold text-gold-400/80 text-sm mb-3 uppercase tracking-wider">Produit</h4>

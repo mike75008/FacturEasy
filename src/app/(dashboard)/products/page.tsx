@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { Topbar } from "@/components/dashboard/topbar";
 import { GlassCard } from "@/components/premium/glass-card";
 import { PremiumButton } from "@/components/premium/premium-button";
@@ -83,56 +82,54 @@ export default function ProductsPage() {
         </div>
 
         {/* Form modal */}
-        <AnimatePresence>
-          {showForm && editing && (
-            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="mb-6">
-              <GlassCard hover={false}>
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-display font-semibold">
-                    {editing.id ? "Modifier le produit" : "Nouveau produit / service"}
-                  </h3>
-                  <button onClick={() => { setShowForm(false); setEditing(null); }} className="text-atlantic-200/30 hover:text-white transition-colors">
-                    <X className="w-5 h-5" />
-                  </button>
+        {showForm && editing && (
+          <div className="mb-6">
+            <GlassCard hover={false}>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-display font-semibold">
+                  {editing.id ? "Modifier le produit" : "Nouveau produit / service"}
+                </h3>
+                <button onClick={() => { setShowForm(false); setEditing(null); }} className="text-atlantic-200/30 hover:text-white transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <PremiumInput label="Nom *" placeholder="Consultation" value={editing.name || ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className="lg:col-span-2" />
+                <PremiumInput label="Catégorie" placeholder="Service, Matériel..." value={editing.category || ""} onChange={(e) => setEditing({ ...editing, category: e.target.value })} />
+                <div>
+                  <label className="block text-sm font-sans font-medium text-gold-300 mb-2">Unité</label>
+                  <select value={editing.unit || "unité"} onChange={(e) => setEditing({ ...editing, unit: e.target.value })} className="premium-input w-full text-sm">
+                    {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                  </select>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <PremiumInput label="Nom *" placeholder="Consultation" value={editing.name || ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className="lg:col-span-2" />
-                  <PremiumInput label="Catégorie" placeholder="Service, Matériel..." value={editing.category || ""} onChange={(e) => setEditing({ ...editing, category: e.target.value })} />
-                  <div>
-                    <label className="block text-sm font-sans font-medium text-gold-300 mb-2">Unité</label>
-                    <select value={editing.unit || "unité"} onChange={(e) => setEditing({ ...editing, unit: e.target.value })} className="premium-input w-full text-sm">
-                      {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                  </div>
-                  <PremiumInput label="Prix unitaire HT (€) *" type="number" step="0.01" placeholder="0.00" value={String(editing.unit_price || "")} onChange={(e) => setEditing({ ...editing, unit_price: parseFloat(e.target.value) || 0 })} />
-                  <div>
-                    <label className="block text-sm font-sans font-medium text-gold-300 mb-2">Taux TVA</label>
-                    <select value={editing.tva_rate ?? 20} onChange={(e) => setEditing({ ...editing, tva_rate: parseFloat(e.target.value) })} className="premium-input w-full text-sm">
-                      {TVA_RATES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                  </div>
-                  <PremiumInput label="Description" placeholder="Description détaillée..." value={editing.description || ""} onChange={(e) => setEditing({ ...editing, description: e.target.value })} className="lg:col-span-2" />
+                <PremiumInput label="Prix unitaire HT (€) *" type="number" step="0.01" placeholder="0.00" value={String(editing.unit_price || "")} onChange={(e) => setEditing({ ...editing, unit_price: parseFloat(e.target.value) || 0 })} />
+                <div>
+                  <label className="block text-sm font-sans font-medium text-gold-300 mb-2">Taux TVA</label>
+                  <select value={editing.tva_rate ?? 20} onChange={(e) => setEditing({ ...editing, tva_rate: parseFloat(e.target.value) })} className="premium-input w-full text-sm">
+                    {TVA_RATES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
                 </div>
-                <div className="mt-6 flex justify-end gap-3">
-                  <PremiumButton variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Annuler</PremiumButton>
-                  <PremiumButton onClick={handleSave} icon={<Check className="w-4 h-4" />}>
-                    {editing.id ? "Mettre à jour" : "Créer"}
-                  </PremiumButton>
-                </div>
-              </GlassCard>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                <PremiumInput label="Description" placeholder="Description détaillée..." value={editing.description || ""} onChange={(e) => setEditing({ ...editing, description: e.target.value })} className="lg:col-span-2" />
+              </div>
+              <div className="mt-6 flex justify-end gap-3">
+                <PremiumButton variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Annuler</PremiumButton>
+                <PremiumButton onClick={handleSave} icon={<Check className="w-4 h-4" />}>
+                  {editing.id ? "Mettre à jour" : "Créer"}
+                </PremiumButton>
+              </div>
+            </GlassCard>
+          </div>
+        )}
 
         {/* Product list */}
         {filtered.length === 0 && !showForm ? (
           <GlassCard hover={false} className="py-20">
             <div className="text-center">
-              <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }} className="inline-block">
+              <div className="inline-block animate-float">
                 <div className="w-20 h-20 rounded-2xl bg-gold-400/10 flex items-center justify-center mx-auto mb-6">
                   <Package className="w-10 h-10 text-gold-400/40" />
                 </div>
-              </motion.div>
+              </div>
               <h3 className="text-xl font-display font-semibold text-white mb-2">
                 {search ? "Aucun résultat" : "Catalogue vide"}
               </h3>
@@ -143,12 +140,9 @@ export default function ProductsPage() {
           </GlassCard>
         ) : (
           <div className="space-y-2">
-            {filtered.map((product, i) => (
-              <motion.div
+            {filtered.map((product) => (
+              <div
                 key={product.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.03 }}
                 className="flex items-center gap-4 p-4 rounded-xl border border-gold-400/5 bg-atlantic-800/20 hover:border-gold-400/20 hover:bg-atlantic-800/30 transition-all group"
               >
                 <div className="w-10 h-10 rounded-xl bg-gold-400/10 flex items-center justify-center">
@@ -182,7 +176,7 @@ export default function ProductsPage() {
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         )}

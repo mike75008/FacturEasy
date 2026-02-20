@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useInView } from "framer-motion";
 
 interface AnimatedCounterProps {
   target: number;
@@ -21,31 +20,52 @@ export function AnimatedCounter({
   decimals = 0,
 }: AnimatedCounterProps) {
   const ref = useRef<HTMLSpanElement>(null);
-  const isInView = useInView(ref, { once: true });
   const [value, setValue] = useState(0);
+  const [hasAnimated, setHasAnimated] = useState(false);
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!isInView) return;
+    if (hasAnimated) return;
 
-    const startTime = Date.now();
-    const durationMs = duration * 1000;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setHasAnimated(true);
+          observer.disconnect();
 
-    function update() {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / durationMs, 1);
-      // Ease out cubic
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(eased * target);
+          const startTime = Date.now();
+          const durationMs = duration * 1000;
 
-      if (progress < 1) {
-        requestAnimationFrame(update);
-      } else {
-        setValue(target);
+          function update() {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / durationMs, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            setValue(eased * target);
+
+            if (progress < 1) {
+              rafRef.current = requestAnimationFrame(update);
+            } else {
+              setValue(target);
+              rafRef.current = null;
+            }
+          }
+
+          rafRef.current = requestAnimationFrame(update);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (ref.current) observer.observe(ref.current);
+
+    return () => {
+      observer.disconnect();
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
       }
-    }
-
-    requestAnimationFrame(update);
-  }, [isInView, target, duration]);
+    };
+  }, [target, duration, hasAnimated]);
 
   return (
     <span ref={ref} className={className}>

@@ -1,9 +1,8 @@
 "use client";
 
-import { motion, type HTMLMotionProps } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-interface PremiumCardProps extends HTMLMotionProps<"div"> {
+interface PremiumCardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   className?: string;
   hover?: boolean;
@@ -18,10 +17,7 @@ export function PremiumCard({
   ...props
 }: PremiumCardProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: "easeOut" }}
+    <div
       className={cn(
         "premium-card p-6",
         hover && "hover:shadow-premium-lg hover:border-gold-400 transition-all duration-300",
@@ -31,6 +27,6 @@ export function PremiumCard({
       {...props}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }

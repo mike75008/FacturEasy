@@ -1,40 +1,14 @@
 "use client";
 
-import { motion } from "framer-motion";
-
 export function AnimatedBackground() {
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden">
       {/* Base gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-atlantic-900 via-atlantic-700 to-atlantic-800" />
 
-      {/* Animated orbs */}
-      <motion.div
-        animate={{
-          x: [0, 100, -50, 0],
-          y: [0, -80, 60, 0],
-          scale: [1, 1.2, 0.9, 1],
-        }}
-        transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-        className="absolute top-1/4 left-1/4 w-[600px] h-[600px] rounded-full bg-gold-400/[0.03] blur-[120px]"
-      />
-      <motion.div
-        animate={{
-          x: [0, -120, 80, 0],
-          y: [0, 100, -60, 0],
-          scale: [1, 0.8, 1.1, 1],
-        }}
-        transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-        className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] rounded-full bg-atlantic-400/[0.05] blur-[100px]"
-      />
-      <motion.div
-        animate={{
-          x: [0, 60, -100, 0],
-          y: [0, -40, 80, 0],
-        }}
-        transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-        className="absolute top-1/2 left-1/2 w-[400px] h-[400px] rounded-full bg-gold-400/[0.02] blur-[80px]"
-      />
+      {/* CSS-only animated orbs (GPU-accelerated via transform, no JS) */}
+      <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] rounded-full bg-gold-400/[0.03] blur-[100px] animate-orb-1" />
+      <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-atlantic-400/[0.04] blur-[80px] animate-orb-2" />
 
       {/* Subtle grid overlay */}
       <div

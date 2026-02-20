@@ -1,0 +1,37 @@
+   ▲ Next.js 15.5.12
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 28.1s
+   Linting and checking validity of types ...
+
+./src/app/(dashboard)/settings/page.tsx
+163:23  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+
+---STDERR---
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of C:\Users\hagbe\package-lock.json as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles: 
+   * C:\Users\hagbe\Downloads\facturation template universelle\package-lock.json
+   * C:\Users\hagbe\Downloads\package-lock.json
+
+Failed to compile.
+
+./src/app/(dashboard)/documents/page.tsx:134:6
+Type error: Conversion of type 'LineForm' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Index signature for type 'string' is missing in type 'LineForm'.
+
+[0m [90m 132 |[39m   [36mfunction[39m updateLine(index[33m:[39m number[33m,[39m field[33m:[39m keyof [33mLineForm[39m[33m,[39m value[33m:[39m string [33m|[39m number) {
+ [90m 133 |[39m     [36mconst[39m newLines [33m=[39m [[33m...[39mlines][33m;[39m
+[31m[1m>[22m[39m[90m 134 |[39m     (newLines[index] [36mas[39m [33mRecord[39m[33m<[39m[33mstring[39m[33m,[39m unknown[33m>[39m)[field] [33m=[39m value[33m;[39m
+ [90m     |[39m      [31m[1m^[22m[39m
+ [90m 135 |[39m     setLines(newLines)[33m;[39m
+ [90m 136 |[39m   }
+ [90m 137 |[39m[0m
+Next.js build worker exited with code: 1 and signal: null
+
+EXIT:1

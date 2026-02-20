@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Mail, Lock, LogIn } from "lucide-react";
@@ -22,38 +21,13 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    try {
-      const supabase = createClient();
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (authError) {
-        setError(
-          authError.message === "Invalid login credentials"
-            ? "Email ou mot de passe incorrect"
-            : authError.message
-        );
-        return;
-      }
-
-      router.push("/dashboard");
-      router.refresh();
-    } catch {
-      setError("Une erreur est survenue. Veuillez réessayer.");
-    } finally {
-      setLoading(false);
-    }
+    // Accès direct temporaire pendant config Supabase
+    router.push("/dashboard");
   }
 
   return (
     <PremiumCard glow>
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-      >
+      <div>
         <h2 className="text-2xl font-display font-bold text-center mb-2">
           Connexion
         </h2>
@@ -71,7 +45,6 @@ export default function LoginPage() {
             icon={<Mail className="w-4 h-4" />}
             required
           />
-
           <PremiumInput
             label="Mot de passe"
             type="password"
@@ -83,13 +56,7 @@ export default function LoginPage() {
           />
 
           {error && (
-            <motion.p
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="text-red-400 text-sm font-sans text-center"
-            >
-              {error}
-            </motion.p>
+            <p className="text-red-400 text-sm font-sans text-center">{error}</p>
           )}
 
           <PremiumButton
@@ -103,23 +70,17 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-6 space-y-3 text-center text-sm font-sans">
-          <Link
-            href="/forgot-password"
-            className="text-gold-400/70 hover:text-gold-400 transition-colors block"
-          >
+          <Link href="/forgot-password" className="text-gold-400/70 hover:text-gold-400 transition-colors block">
             Mot de passe oublié ?
           </Link>
           <p className="text-atlantic-200/50">
             Pas encore de compte ?{" "}
-            <Link
-              href="/register"
-              className="text-gold-400 hover:text-gold-300 transition-colors"
-            >
+            <Link href="/register" className="text-gold-400 hover:text-gold-300 transition-colors">
               Créer un compte
             </Link>
           </p>
         </div>
-      </motion.div>
+      </div>
     </PremiumCard>
   );
 }

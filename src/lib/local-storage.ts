@@ -631,23 +631,329 @@ export function getDashboardStats() {
   const documents = getDocuments();
   const clients = getClients();
   const payments = getPayments();
+  const reminders = getReminders();
 
   const invoices = documents.filter((d) => d.type === "facture");
+  const quotes = documents.filter((d) => d.type === "devis");
   const totalCA = payments.reduce((sum, p) => sum + p.amount, 0);
-  const pendingInvoices = invoices.filter((d) => d.status === "envoye");
+  const totalInvoiced = invoices.reduce((sum, d) => sum + d.total_ttc, 0);
+  const pendingInvoices = invoices.filter((d) => d.status === "envoye" || d.status === "valide");
   const overdueInvoices = invoices.filter((d) => {
-    if (!d.due_date || d.status === "paye") return false;
+    if (!d.due_date || d.status === "paye" || d.status === "annule") return false;
     return new Date(d.due_date) < new Date();
   });
   const paidInvoices = invoices.filter((d) => d.status === "paye");
   const paymentRate = invoices.length > 0 ? (paidInvoices.length / invoices.length) * 100 : 0;
+  const overdueTotal = overdueInvoices.reduce((s, d) => s + d.total_ttc, 0);
+  const pendingTotal = pendingInvoices.reduce((s, d) => s + d.total_ttc, 0);
+  const sentReminders = reminders.filter((r) => r.sent_at).length;
+
+  // Monthly CA data (last 12 months)
+  const monthlyCA: number[] = [];
+  const today = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const month = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() - i + 1, 0);
+    const monthPayments = payments.filter((p) => {
+      const d = new Date(p.payment_date);
+      return d >= month && d <= monthEnd;
+    });
+    monthlyCA.push(monthPayments.reduce((s, p) => s + p.amount, 0));
+  }
+
+  // Recent activity from audit logs
+  const auditLogs = getAuditLogs().slice(0, 10);
+
+  // Accepted quotes
+  const acceptedQuotes = quotes.filter((d) => d.status === "valide" || d.status === "paye").length;
+  const quoteConversion = quotes.length > 0 ? (acceptedQuotes / quotes.length) * 100 : 0;
 
   return {
     totalCA,
+    totalInvoiced,
     invoiceCount: invoices.length,
+    quoteCount: quotes.length,
     pendingCount: pendingInvoices.length,
+    pendingTotal,
     overdueCount: overdueInvoices.length,
+    overdueTotal,
     clientCount: clients.length,
+    productCount: getProducts().length,
     paymentRate: Math.round(paymentRate * 10) / 10,
+    quoteConversion: Math.round(quoteConversion * 10) / 10,
+    reminderCount: reminders.length,
+    sentReminders,
+    monthlyCA,
+    recentAuditLogs: auditLogs,
   };
+}
+
+// ═══════════════════════════════════
+// ANOMALY DETECTION
+// ═══════════════════════════════════
+
+export interface LocalAnomaly {
+  id: string;
+  type: "montant_anormal" | "doublon" | "retard_paiement" | "degradation" | "sequence_gap";
+  severity: "info" | "warning" | "critical";
+  title: string;
+  description: string;
+  document_id: string | null;
+  client_id: string | null;
+  resolved: boolean;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+export function getAnomalies(): LocalAnomaly[] {
+  return getStore<LocalAnomaly>("anomalies");
+}
+
+export function resolveAnomaly(id: string): void {
+  const anomalies = getAnomalies();
+  const idx = anomalies.findIndex((a) => a.id === id);
+  if (idx >= 0) {
+    anomalies[idx].resolved = true;
+    anomalies[idx].resolved_at = now();
+    setStore("anomalies", anomalies);
+  }
+}
+
+export function runAnomalyDetection(): LocalAnomaly[] {
+  const documents = getDocuments();
+  const clients = getClients();
+  const existing = getAnomalies();
+  const newAnomalies: LocalAnomaly[] = [];
+
+  const invoices = documents.filter((d) => d.type === "facture");
+  if (invoices.length === 0) return existing;
+
+  // 1. Detect abnormal amounts (>3x average)
+  const avgAmount = invoices.reduce((s, d) => s + d.total_ttc, 0) / invoices.length;
+  invoices.forEach((inv) => {
+    if (inv.total_ttc > avgAmount * 3 && avgAmount > 0) {
+      const alreadyExists = existing.some((e) => e.document_id === inv.id && e.type === "montant_anormal");
+      if (!alreadyExists) {
+        newAnomalies.push({
+          id: generateId(),
+          type: "montant_anormal",
+          severity: "warning",
+          title: `Montant anormalement élevé`,
+          description: `La facture ${inv.number} (${inv.total_ttc.toFixed(2)}€) est ${(inv.total_ttc / avgAmount).toFixed(1)}x supérieure à la moyenne (${avgAmount.toFixed(2)}€).`,
+          document_id: inv.id,
+          client_id: inv.client_id,
+          resolved: false,
+          resolved_at: null,
+          created_at: now(),
+        });
+      }
+    }
+  });
+
+  // 2. Detect duplicate amounts to same client
+  invoices.forEach((inv, i) => {
+    for (let j = i + 1; j < invoices.length; j++) {
+      const other = invoices[j];
+      if (inv.client_id === other.client_id && inv.total_ttc === other.total_ttc && inv.total_ttc > 0) {
+        const daysDiff = Math.abs(new Date(inv.date).getTime() - new Date(other.date).getTime()) / (1000 * 60 * 60 * 24);
+        if (daysDiff < 7) {
+          const alreadyExists = existing.some(
+            (e) => e.type === "doublon" && (e.document_id === inv.id || e.document_id === other.id)
+          );
+          if (!alreadyExists) {
+            newAnomalies.push({
+              id: generateId(),
+              type: "doublon",
+              severity: "critical",
+              title: `Doublon potentiel détecté`,
+              description: `${inv.number} et ${other.number} ont le même montant (${inv.total_ttc.toFixed(2)}€) pour le même client, à ${daysDiff.toFixed(0)} jour(s) d'écart.`,
+              document_id: inv.id,
+              client_id: inv.client_id,
+              resolved: false,
+              resolved_at: null,
+              created_at: now(),
+            });
+          }
+        }
+      }
+    }
+  });
+
+  // 3. Detect payment degradation per client
+  clients.forEach((client) => {
+    const clientInvoices = invoices.filter((d) => d.client_id === client.id);
+    const overdueCount = clientInvoices.filter((d) => {
+      if (!d.due_date || d.status === "paye" || d.status === "annule") return false;
+      return new Date(d.due_date) < new Date();
+    }).length;
+    if (overdueCount >= 3) {
+      const clientName = client.company_name || `${client.first_name || ""} ${client.last_name || ""}`.trim();
+      const alreadyExists = existing.some((e) => e.client_id === client.id && e.type === "degradation");
+      if (!alreadyExists) {
+        newAnomalies.push({
+          id: generateId(),
+          type: "degradation",
+          severity: "warning",
+          title: `Dégradation de paiement`,
+          description: `${clientName} a ${overdueCount} factures en retard. Risque d'impayé croissant.`,
+          document_id: null,
+          client_id: client.id,
+          resolved: false,
+          resolved_at: null,
+          created_at: now(),
+        });
+      }
+    }
+  });
+
+  // 4. Detect long overdue (>30 days)
+  invoices.forEach((inv) => {
+    if (!inv.due_date || inv.status === "paye" || inv.status === "annule") return;
+    const daysOverdue = Math.floor((Date.now() - new Date(inv.due_date).getTime()) / (1000 * 60 * 60 * 24));
+    if (daysOverdue > 30) {
+      const alreadyExists = existing.some((e) => e.document_id === inv.id && e.type === "retard_paiement");
+      if (!alreadyExists) {
+        newAnomalies.push({
+          id: generateId(),
+          type: "retard_paiement",
+          severity: daysOverdue > 60 ? "critical" : "warning",
+          title: `Retard de paiement critique`,
+          description: `La facture ${inv.number} (${inv.total_ttc.toFixed(2)}€) a ${daysOverdue} jours de retard. Action requise.`,
+          document_id: inv.id,
+          client_id: inv.client_id,
+          resolved: false,
+          resolved_at: null,
+          created_at: now(),
+        });
+      }
+    }
+  });
+
+  if (newAnomalies.length > 0) {
+    setStore("anomalies", [...existing, ...newAnomalies]);
+  }
+
+  return [...existing, ...newAnomalies];
+}
+
+// ═══════════════════════════════════
+// GAMIFICATION ENGINE
+// ═══════════════════════════════════
+
+export interface UserGamification {
+  points: number;
+  level: "bronze" | "argent" | "or" | "platine" | "diamant";
+  badges: Badge[];
+  streak: number;
+  nextLevelPoints: number;
+  progress: number;
+}
+
+export interface Badge {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  earned: boolean;
+  earned_at: string | null;
+}
+
+const LEVEL_THRESHOLDS = {
+  bronze: 0,
+  argent: 500,
+  or: 1500,
+  platine: 3500,
+  diamant: 7000,
+};
+
+const ALL_BADGES: Omit<Badge, "earned" | "earned_at">[] = [
+  { id: "first_invoice", name: "Première facture", description: "Créer votre première facture", icon: "FileText" },
+  { id: "speed_demon", name: "Rapidité", description: "Créer 5 factures en une journée", icon: "Zap" },
+  { id: "client_king", name: "Roi des clients", description: "Avoir 10+ clients actifs", icon: "Crown" },
+  { id: "payment_master", name: "Maître paiement", description: "Taux de paiement > 90%", icon: "Trophy" },
+  { id: "catalog_pro", name: "Catalogue pro", description: "Avoir 20+ produits/services", icon: "Package" },
+  { id: "reminder_guru", name: "Guru des relances", description: "Envoyer 10+ relances", icon: "Bell" },
+  { id: "zero_overdue", name: "Zéro retard", description: "Aucune facture en retard", icon: "Shield" },
+  { id: "revenue_10k", name: "10K€ de CA", description: "Atteindre 10 000€ de CA", icon: "TrendingUp" },
+  { id: "revenue_50k", name: "50K€ de CA", description: "Atteindre 50 000€ de CA", icon: "Rocket" },
+  { id: "perfect_docs", name: "Documents parfaits", description: "10 documents vérifiés sans erreur", icon: "CheckCircle" },
+];
+
+export function getUserGamification(): UserGamification {
+  const stored = getSingle<UserGamification>("gamification_user");
+  if (stored) return recalculateGamification(stored);
+  return recalculateGamification({
+    points: 0,
+    level: "bronze",
+    badges: [],
+    streak: 0,
+    nextLevelPoints: 500,
+    progress: 0,
+  });
+}
+
+function recalculateGamification(current: UserGamification): UserGamification {
+  const stats = getDashboardStats();
+  const reminders = getReminders();
+  const documents = getDocuments();
+
+  // Calculate points
+  let points = 0;
+  points += documents.length * 10; // 10pts per document
+  points += stats.clientCount * 25; // 25pts per client
+  points += stats.sentReminders * 15; // 15pts per sent reminder
+  points += Math.floor(stats.totalCA / 100) * 5; // 5pts per 100€ CA
+  points += documents.filter((d) => d.status === "paye").length * 20; // 20pts per paid invoice
+
+  // Determine level
+  let level: UserGamification["level"] = "bronze";
+  if (points >= LEVEL_THRESHOLDS.diamant) level = "diamant";
+  else if (points >= LEVEL_THRESHOLDS.platine) level = "platine";
+  else if (points >= LEVEL_THRESHOLDS.or) level = "or";
+  else if (points >= LEVEL_THRESHOLDS.argent) level = "argent";
+
+  // Next level
+  const levels: UserGamification["level"][] = ["bronze", "argent", "or", "platine", "diamant"];
+  const currentIdx = levels.indexOf(level);
+  const nextLevel = currentIdx < levels.length - 1 ? levels[currentIdx + 1] : level;
+  const nextLevelPoints = LEVEL_THRESHOLDS[nextLevel];
+  const currentLevelPoints = LEVEL_THRESHOLDS[level];
+  const progress = nextLevelPoints > currentLevelPoints
+    ? ((points - currentLevelPoints) / (nextLevelPoints - currentLevelPoints)) * 100
+    : 100;
+
+  // Calculate badges
+  const badges: Badge[] = ALL_BADGES.map((b) => {
+    let earned = false;
+    const n = now();
+    switch (b.id) {
+      case "first_invoice": earned = documents.some((d) => d.type === "facture"); break;
+      case "client_king": earned = stats.clientCount >= 10; break;
+      case "payment_master": earned = stats.paymentRate >= 90 && stats.invoiceCount > 0; break;
+      case "catalog_pro": earned = stats.productCount >= 20; break;
+      case "reminder_guru": earned = stats.sentReminders >= 10; break;
+      case "zero_overdue": earned = stats.overdueCount === 0 && stats.invoiceCount > 0; break;
+      case "revenue_10k": earned = stats.totalCA >= 10000; break;
+      case "revenue_50k": earned = stats.totalCA >= 50000; break;
+      case "speed_demon": {
+        const today = new Date().toISOString().split("T")[0];
+        earned = documents.filter((d) => d.type === "facture" && d.created_at.startsWith(today)).length >= 5;
+        break;
+      }
+      case "perfect_docs": earned = documents.length >= 10; break;
+    }
+    return { ...b, earned, earned_at: earned ? n : null };
+  });
+
+  const result: UserGamification = {
+    points,
+    level,
+    badges,
+    streak: current.streak,
+    nextLevelPoints,
+    progress: Math.min(Math.round(progress * 10) / 10, 100),
+  };
+
+  setSingle("gamification_user", result);
+  return result;
 }

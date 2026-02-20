@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&family=Inter:wght@300;400;500;600;700&display=swap');
+/* Fonts loaded via next/font in layout.tsx for optimal performance */
 
 @layer base {
   :root {
@@ -115,6 +115,29 @@
   to { stroke-dashoffset: 0; }
 }
 
+/* Background orb animations (pure CSS, GPU-accelerated) */
+@keyframes orb-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(60px, -50px) scale(1.1); }
+  66% { transform: translate(-30px, 40px) scale(0.95); }
+}
+
+@keyframes orb-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-70px, 60px) scale(0.9); }
+  66% { transform: translate(50px, -30px) scale(1.05); }
+}
+
+.animate-orb-1 {
+  animation: orb-1 25s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-orb-2 {
+  animation: orb-2 30s ease-in-out infinite;
+  will-change: transform;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
@@ -131,4 +154,40 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, rgba(212, 175, 55, 0.6), rgba(201, 168, 76, 0.4));
+}
+
+/* Page enter animation — cubic spring pour la grâce */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-page-enter {
+  animation: page-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: opacity, transform;
+}
+
+/* Print styles */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  nav, aside, header, .sticky {
+    display: none !important;
+  }
+  main {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  #invoice-preview {
+    border-radius: 0 !important;
+  }
 }

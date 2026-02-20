@@ -1,0 +1,104 @@
+[96msrc/app/(dashboard)/documents/page.tsx[0m:[93m134[0m:[93m6[0m - [91merror[0m[90m TS2352: [0mConversion of type 'LineForm' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Index signature for type 'string' is missing in type 'LineForm'.
+
+[7m134[0m     (newLines[index] as Record<string, unknown>)[field] = value;
+[7m   [0m [91m     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+[96msrc/lib/local-storage.ts[0m:[93m191[0m:[93m5[0m - [91merror[0m[90m TS1117: [0mAn object literal cannot have multiple properties with the same name.
+
+[7m191[0m     id: generateId(),
+[7m   [0m [91m    ~~[0m
+
+[96msrc/lib/local-storage.ts[0m:[93m238[0m:[93m5[0m - [91merror[0m[90m TS1117: [0mAn object literal cannot have multiple properties with the same name.
+
+[7m238[0m     id: generateId(),
+[7m   [0m [91m    ~~[0m
+
+[96msrc/lib/local-storage.ts[0m:[93m296[0m:[93m5[0m - [91merror[0m[90m TS1117: [0mAn object literal cannot have multiple properties with the same name.
+
+[7m296[0m     id: generateId(),
+[7m   [0m [91m    ~~[0m
+
+[96msrc/lib/local-storage.ts[0m:[93m330[0m:[93m5[0m - [91merror[0m[90m TS2783: [0m'document_id' is specified more than once, so this usage will be overwritten.
+
+[7m330[0m     document_id: data.document_id,
+[7m   [0m [91m    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+  [96msrc/lib/local-storage.ts[0m:[93m343[0m:[93m5[0m
+    [7m343[0m     ...data,
+    [7m   [0m [96m    ~~~~~~~[0m
+    This spread always overwrites this property.
+
+[96msrc/lib/local-storage.ts[0m:[93m344[0m:[93m5[0m - [91merror[0m[90m TS1117: [0mAn object literal cannot have multiple properties with the same name.
+
+[7m344[0m     id: generateId(),
+[7m   [0m [91m    ~~[0m
+
+[96msrc/lib/local-storage.ts[0m:[93m387[0m:[93m5[0m - [91merror[0m[90m TS1117: [0mAn object literal cannot have multiple properties with the same name.
+
+[7m387[0m     id: generateId(),
+[7m   [0m [91m    ~~[0m
+
+[96msrc/lib/local-storage.ts[0m:[93m443[0m:[93m5[0m - [91merror[0m[90m TS1117: [0mAn object literal cannot have multiple properties with the same name.
+
+[7m443[0m     id: generateId(),
+[7m   [0m [91m    ~~[0m
+
+[96msrc/lib/supabase/middleware.ts[0m:[93m15[0m:[93m16[0m - [91merror[0m[90m TS7006: [0mParameter 'cookiesToSet' implicitly has an 'any' type.
+
+[7m15[0m         setAll(cookiesToSet) {
+[7m  [0m [91m               ~~~~~~~~~~~~[0m
+
+[96msrc/lib/supabase/middleware.ts[0m:[93m16[0m:[93m35[0m - [91merror[0m[90m TS7031: [0mBinding element 'name' implicitly has an 'any' type.
+
+[7m16[0m           cookiesToSet.forEach(({ name, value }) =>
+[7m  [0m [91m                                  ~~~~[0m
+
+[96msrc/lib/supabase/middleware.ts[0m:[93m16[0m:[93m41[0m - [91merror[0m[90m TS7031: [0mBinding element 'value' implicitly has an 'any' type.
+
+[7m16[0m           cookiesToSet.forEach(({ name, value }) =>
+[7m  [0m [91m                                        ~~~~~[0m
+
+[96msrc/lib/supabase/middleware.ts[0m:[93m20[0m:[93m35[0m - [91merror[0m[90m TS7031: [0mBinding element 'name' implicitly has an 'any' type.
+
+[7m20[0m           cookiesToSet.forEach(({ name, value, options }) =>
+[7m  [0m [91m                                  ~~~~[0m
+
+[96msrc/lib/supabase/middleware.ts[0m:[93m20[0m:[93m41[0m - [91merror[0m[90m TS7031: [0mBinding element 'value' implicitly has an 'any' type.
+
+[7m20[0m           cookiesToSet.forEach(({ name, value, options }) =>
+[7m  [0m [91m                                        ~~~~~[0m
+
+[96msrc/lib/supabase/middleware.ts[0m:[93m20[0m:[93m48[0m - [91merror[0m[90m TS7031: [0mBinding element 'options' implicitly has an 'any' type.
+
+[7m20[0m           cookiesToSet.forEach(({ name, value, options }) =>
+[7m  [0m [91m                                               ~~~~~~~[0m
+
+[96msrc/lib/supabase/server.ts[0m:[93m15[0m:[93m16[0m - [91merror[0m[90m TS7006: [0mParameter 'cookiesToSet' implicitly has an 'any' type.
+
+[7m15[0m         setAll(cookiesToSet) {
+[7m  [0m [91m               ~~~~~~~~~~~~[0m
+
+[96msrc/lib/supabase/server.ts[0m:[93m17[0m:[93m37[0m - [91merror[0m[90m TS7031: [0mBinding element 'name' implicitly has an 'any' type.
+
+[7m17[0m             cookiesToSet.forEach(({ name, value, options }) =>
+[7m  [0m [91m                                    ~~~~[0m
+
+[96msrc/lib/supabase/server.ts[0m:[93m17[0m:[93m43[0m - [91merror[0m[90m TS7031: [0mBinding element 'value' implicitly has an 'any' type.
+
+[7m17[0m             cookiesToSet.forEach(({ name, value, options }) =>
+[7m  [0m [91m                                          ~~~~~[0m
+
+[96msrc/lib/supabase/server.ts[0m:[93m17[0m:[93m50[0m - [91merror[0m[90m TS7031: [0mBinding element 'options' implicitly has an 'any' type.
+
+[7m17[0m             cookiesToSet.forEach(({ name, value, options }) =>
+[7m  [0m [91m                                                 ~~~~~~~[0m
+
+
+Found 18 errors in 4 files.
+
+Errors  Files
+     1  src/app/(dashboard)/documents/page.tsx[90m:134[0m
+     7  src/lib/local-storage.ts[90m:191[0m
+     6  src/lib/supabase/middleware.ts[90m:15[0m
+     4  src/lib/supabase/server.ts[90m:15[0m

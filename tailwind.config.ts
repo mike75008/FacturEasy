@@ -50,9 +50,9 @@ const config: Config = {
         },
       },
       fontFamily: {
-        display: ["Playfair Display", "Georgia", "serif"],
-        body: ["Cormorant Garamond", "Garamond", "serif"],
-        sans: ["Inter", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "Georgia", "serif"],
+        body: ["var(--font-sans)", "system-ui", "sans-serif"],
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
       },
       backgroundImage: {
         "premium-gradient": "linear-gradient(135deg, #1e3a5f 0%, #2c5f8a 50%, #1e3a5f 100%)",
