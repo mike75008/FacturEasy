@@ -19,7 +19,12 @@
       "Bash(git -C \"C:\\\\Users\\\\hagbe\\\\Downloads\\\\facturation template universelle\" status)",
       "Bash(git -C \"/c/Users/hagbe/Downloads/facturation template universelle\" status)",
       "Bash(npm install:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(git -C \"C:/Users/hagbe/Downloads/facturation template universelle\" status)",
+      "Bash(tee:*)",
+      "Bash(git -C \"C:/Users/hagbe/Downloads/facturation template universelle\" add -A)",
+      "Bash(git -C \"C:/Users/hagbe/Downloads/facturation template universelle\" commit -m \"Phase 6 : navigation premium + integration Supabase:*)",
+      "Bash(git -C \"C:/Users/hagbe/Downloads/facturation template universelle\" log --oneline -3)"
     ]
   }
 }
