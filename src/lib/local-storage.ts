@@ -169,7 +169,6 @@ export function saveClient(data: Partial<Client> & { id?: string }): Client {
   }
 
   const newClient: Client = {
-    id: generateId(),
     organization_id: "org-default",
     type: "professionnel",
     company_name: null,
@@ -223,7 +222,6 @@ export function saveProduct(data: Partial<Product> & { id?: string }): Product {
   }
 
   const newProduct: Product = {
-    id: generateId(),
     organization_id: "org-default",
     name: "",
     description: null,
@@ -270,7 +268,6 @@ export function saveDocument(data: Partial<Document> & { id?: string }): Documen
   }
 
   const newDoc: Document = {
-    id: generateId(),
     organization_id: "org-default",
     client_id: "",
     type: "facture",
@@ -326,8 +323,6 @@ export function saveDocumentLine(data: Partial<DocumentLine> & { document_id: st
   }
 
   const newLine: DocumentLine = {
-    id: generateId(),
-    document_id: data.document_id,
     product_id: null,
     description: "",
     quantity: 1,
@@ -374,7 +369,6 @@ export function getPayments(documentId?: string): Payment[] {
 export function savePayment(data: Partial<Payment>): Payment {
   const payments = getStore<Payment>("payments");
   const newPayment: Payment = {
-    id: generateId(),
     document_id: "",
     organization_id: "org-default",
     amount: 0,
@@ -429,7 +423,6 @@ export function getReminders(): Reminder[] {
 export function saveReminder(data: Partial<Reminder>): Reminder {
   const reminders = getStore<Reminder>("reminders");
   const entry: Reminder = {
-    id: generateId(),
     document_id: "",
     organization_id: "org-default",
     channel: "email",

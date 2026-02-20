@@ -129,7 +129,7 @@ export default function DocumentsPage() {
 
   function updateLine(index: number, field: keyof LineForm, value: string | number) {
     const newLines = [...lines];
-    (newLines[index] as Record<string, unknown>)[field] = value;
+    newLines[index] = { ...newLines[index], [field]: value };
     setLines(newLines);
   }
 

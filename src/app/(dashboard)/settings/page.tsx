@@ -16,13 +16,18 @@ import {
   X,
 } from "lucide-react";
 import {
-  getOrganization,
-  saveOrganization,
-  getLogo,
-  saveLogo,
-  getSequences,
-  updateSequencePrefix,
+  getLogo, saveLogo,
+  getOrganization as getOrgLS,
+  getSequences as getSeqLS,
+  saveOrganization as saveOrgLS,
+  updateSequencePrefix as updateSeqPrefixLS,
 } from "@/lib/local-storage";
+import {
+  getOrganization as getOrganizationDB,
+  saveOrganization as saveOrganizationDB,
+  getSequences as getSequencesDB,
+  updateSequencePrefix as updateSequencePrefixDB,
+} from "@/lib/supabase/data";
 import { validateSIRET, validateTVANumber, validateIBAN } from "@/lib/validators";
 import type { Organization, NumberingSequence } from "@/types/database";
 
@@ -39,14 +44,33 @@ export default function SettingsPage() {
   const [org, setOrg] = useState<Organization | null>(null);
   const [logo, setLogoState] = useState<string | null>(null);
   const [sequences, setSequences] = useState<NumberingSequence[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setOrg(getOrganization());
-    setLogoState(getLogo());
-    setSequences(getSequences());
+    async function load() {
+      try {
+        const [orgData, seqData] = await Promise.all([
+          getOrganizationDB(),
+          getSequencesDB(),
+        ]);
+        // Si Supabase retourne des données on les utilise, sinon fallback localStorage
+        setOrg(orgData ?? getOrgLS());
+        setSequences(seqData.length > 0 ? seqData : getSeqLS());
+        setLogoState(getLogo());
+      } catch {
+        // Pas authentifié ou erreur réseau → localStorage
+        setOrg(getOrgLS());
+        setSequences(getSeqLS());
+        setLogoState(getLogo());
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
   }, []);
 
   const updateOrg = useCallback((field: keyof Organization, value: string | number | null) => {
@@ -73,12 +97,22 @@ export default function SettingsPage() {
     setErrors(newErrors);
   }, [errors]);
 
-  function handleSave() {
+  async function handleSave() {
     if (!org) return;
     if (Object.keys(errors).length > 0) return;
-    saveOrganization(org);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setSaving(true);
+    try {
+      // Tente Supabase, fallback localStorage si pas authentifié
+      try {
+        await saveOrganizationDB(org);
+      } catch {
+        saveOrgLS(org);
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -97,9 +131,32 @@ export default function SettingsPage() {
     reader.readAsDataURL(file);
   }
 
-  function handleSequencePrefix(docType: string, prefix: string) {
-    updateSequencePrefix(docType, prefix.toUpperCase());
-    setSequences(getSequences());
+  async function handleSequencePrefix(docType: string, prefix: string) {
+    const upper = prefix.toUpperCase();
+    // Mise à jour optimiste immédiate
+    setSequences((prev) =>
+      prev.map((s) => s.document_type === docType ? { ...s, prefix: upper } : s)
+    );
+    try {
+      await updateSequencePrefixDB(docType, upper);
+    } catch {
+      // Pas authentifié → localStorage
+      updateSeqPrefixLS(docType, upper);
+    }
+  }
+
+  if (loading) {
+    return (
+      <PageTransition>
+        <Topbar title="Paramètres" subtitle="Configuration de votre entreprise" />
+        <div className="p-6 flex items-center justify-center py-20">
+          <div className="text-center">
+            <div className="w-8 h-8 rounded-full border-2 border-gold-400/30 border-t-gold-400 animate-spin mx-auto mb-4" />
+            <p className="text-sm font-sans text-atlantic-200/40">Chargement...</p>
+          </div>
+        </div>
+      </PageTransition>
+    );
   }
 
   if (!org) return null;
@@ -239,6 +296,7 @@ export default function SettingsPage() {
               )}
               <PremiumButton
                 onClick={handleSave}
+                loading={saving}
                 icon={<Save className="w-4 h-4" />}
                 disabled={Object.keys(errors).length > 0}
               >
@@ -298,6 +356,7 @@ export default function SettingsPage() {
               )}
               <PremiumButton
                 onClick={handleSave}
+                loading={saving}
                 icon={<Save className="w-4 h-4" />}
                 disabled={Object.keys(errors).length > 0}
               >

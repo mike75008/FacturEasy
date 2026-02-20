@@ -10,7 +10,12 @@ import {
   Users, Plus, Search, UserPlus, Building2, Star, Edit2, Trash2,
   Phone, Mail, MapPin, X, ChevronRight, Filter, FileText,
 } from "lucide-react";
-import { getClients, saveClient, deleteClient, getDocuments } from "@/lib/local-storage";
+import { getDocuments } from "@/lib/local-storage";
+import {
+  getClients as getClientsDB,
+  saveClient as saveClientDB,
+  deleteClient as deleteClientDB,
+} from "@/lib/supabase/data";
 import { formatCurrency } from "@/lib/utils";
 import type { Client } from "@/types/database";
 
@@ -18,14 +23,28 @@ type ViewMode = "list" | "form" | "detail";
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<"all" | "particulier" | "professionnel">("all");
   const [view, setView] = useState<ViewMode>("list");
   const [editingClient, setEditingClient] = useState<Partial<Client> | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
+  async function loadClients() {
+    try {
+      const data = await getClientsDB();
+      setClients(data);
+    } catch (e) {
+      setError("Impossible de charger les clients");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    setClients(getClients());
+    loadClients();
   }, []);
 
   const filtered = useMemo(() => {
@@ -52,20 +71,32 @@ export default function ClientsPage() {
     setView("detail");
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!editingClient) return;
-    saveClient(editingClient);
-    setClients(getClients());
-    setView("list");
-    setEditingClient(null);
+    setSaving(true);
+    setError(null);
+    try {
+      await saveClientDB(editingClient);
+      await loadClients();
+      setView("list");
+      setEditingClient(null);
+    } catch (e: any) {
+      setError(e.message || "Erreur lors de la sauvegarde");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
     if (!confirm("Supprimer ce client ?")) return;
-    deleteClient(id);
-    setClients(getClients());
-    setView("list");
-    setSelectedClient(null);
+    try {
+      await deleteClientDB(id);
+      await loadClients();
+      setView("list");
+      setSelectedClient(null);
+    } catch (e: any) {
+      setError(e.message || "Erreur lors de la suppression");
+    }
   }
 
   function updateField(field: keyof Client, value: string) {
@@ -78,8 +109,14 @@ export default function ClientsPage() {
 
   return (
     <PageTransition>
-      <Topbar title="Clients" subtitle={`${clients.length} client${clients.length > 1 ? "s" : ""}`} />
+      <Topbar title="Clients" subtitle={loading ? "Chargement..." : `${clients.length} client${clients.length > 1 ? "s" : ""}`} />
       <div className="p-6">
+        {error && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-red-400/10 border border-red-400/20 text-red-400 text-sm font-sans">
+            {error}
+          </div>
+        )}
+
         {/* ═══ LIST VIEW ═══ */}
         {view === "list" && (
           <div>
@@ -123,7 +160,14 @@ export default function ClientsPage() {
             </div>
 
             {/* Client list or empty state */}
-            {filtered.length === 0 ? (
+            {loading ? (
+              <GlassCard hover={false} className="py-20">
+                <div className="text-center">
+                  <div className="w-8 h-8 rounded-full border-2 border-gold-400/30 border-t-gold-400 animate-spin mx-auto mb-4" />
+                  <p className="text-sm font-sans text-atlantic-200/40">Chargement des clients...</p>
+                </div>
+              </GlassCard>
+            ) : filtered.length === 0 ? (
               <GlassCard hover={false} className="py-20">
                 <div className="text-center">
                   <div className="inline-block animate-float">
@@ -222,7 +266,7 @@ export default function ClientsPage() {
                 <PremiumButton variant="ghost" onClick={() => { setView("list"); setEditingClient(null); }}>
                   Annuler
                 </PremiumButton>
-                <PremiumButton onClick={handleSave} icon={<Plus className="w-4 h-4" />}>
+                <PremiumButton onClick={handleSave} loading={saving} icon={<Plus className="w-4 h-4" />}>
                   {editingClient.id ? "Mettre à jour" : "Créer le client"}
                 </PremiumButton>
               </div>

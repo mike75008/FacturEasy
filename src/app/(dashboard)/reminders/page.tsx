@@ -10,8 +10,17 @@ import {
   CheckCircle2, Sparkles, ChevronRight, MessageSquare,
 } from "lucide-react";
 import {
-  getReminders, saveReminder, getDocuments, getClients,
+  getReminders as getRemindersLS,
+  saveReminder as saveReminderLS,
+  getDocuments,
+  getClients as getClientsLS,
 } from "@/lib/local-storage";
+import {
+  getReminders as getRemindersDB,
+  saveReminder as saveReminderDB,
+  markReminderSent,
+  getClients as getClientsDB,
+} from "@/lib/supabase/data";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import type { Reminder, Document as Doc, Client } from "@/types/database";
 
@@ -39,10 +48,27 @@ export default function RemindersPage() {
   const [content, setContent] = useState("");
   const [generating, setGenerating] = useState(false);
 
-  useEffect(() => {
-    setReminders(getReminders());
+  async function loadData() {
+    // Documents : encore en localStorage (pas migré)
     setDocs(getDocuments());
-    setClientsState(getClients());
+    // Clients : Supabase avec fallback localStorage
+    try {
+      const c = await getClientsDB();
+      setClientsState(c.length > 0 ? c : getClientsLS());
+    } catch {
+      setClientsState(getClientsLS());
+    }
+    // Relances : Supabase avec fallback localStorage
+    try {
+      const r = await getRemindersDB();
+      setReminders(r.length > 0 ? r : getRemindersLS());
+    } catch {
+      setReminders(getRemindersLS());
+    }
+  }
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   const overdueInvoices = useMemo(() => {
@@ -89,28 +115,38 @@ export default function RemindersPage() {
     }, 1500);
   }
 
-  function handleCreateReminder() {
+  async function handleCreateReminder() {
     if (!selectedDocId || !content) return;
-    saveReminder({
-      document_id: selectedDocId,
-      channel,
-      priority,
-      content,
-      ai_generated: true,
-    });
-    setReminders(getReminders());
+    const payload = { document_id: selectedDocId, channel, priority, content, ai_generated: true };
+    try {
+      await saveReminderDB(payload);
+      const updated = await getRemindersDB();
+      setReminders(updated);
+    } catch {
+      // Fallback localStorage
+      saveReminderLS(payload);
+      setReminders(getRemindersLS());
+    }
     setShowCreate(false);
     setContent("");
     setSelectedDocId("");
   }
 
-  function markSent(reminder: Reminder) {
-    const all = getReminders();
-    const idx = all.findIndex((r) => r.id === reminder.id);
-    if (idx >= 0) {
-      all[idx] = { ...all[idx], sent_at: new Date().toISOString() };
-      localStorage.setItem("facturepro_reminders", JSON.stringify(all));
-      setReminders([...all]);
+  async function markSent(reminder: Reminder) {
+    // Mise à jour optimiste immédiate
+    setReminders((prev) =>
+      prev.map((r) => r.id === reminder.id ? { ...r, sent_at: new Date().toISOString() } : r)
+    );
+    try {
+      await markReminderSent(reminder.id);
+    } catch {
+      // Fallback localStorage
+      const all = getRemindersLS();
+      const idx = all.findIndex((r) => r.id === reminder.id);
+      if (idx >= 0) {
+        all[idx] = { ...all[idx], sent_at: new Date().toISOString() };
+        saveReminderLS(all[idx]);
+      }
     }
   }
 

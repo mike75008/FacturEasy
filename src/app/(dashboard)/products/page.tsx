@@ -9,7 +9,11 @@ import { PageTransition } from "@/components/premium/page-transition";
 import {
   Package, Plus, Search, Edit2, Trash2, Tag, Check, X,
 } from "lucide-react";
-import { getProducts, saveProduct, deleteProduct } from "@/lib/local-storage";
+import {
+  getProducts as getProductsDB,
+  saveProduct as saveProductDB,
+  deleteProduct as deleteProductDB,
+} from "@/lib/supabase/data";
 import { formatCurrency } from "@/lib/utils";
 import type { Product } from "@/types/database";
 
@@ -26,12 +30,26 @@ const TVA_RATES = [
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
 
+  async function loadProducts() {
+    try {
+      const data = await getProductsDB();
+      setProducts(data);
+    } catch (e) {
+      setError("Impossible de charger les produits");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    setProducts(getProducts());
+    loadProducts();
   }, []);
 
   const filtered = useMemo(() => {
@@ -52,24 +70,41 @@ export default function ProductsPage() {
     setShowForm(true);
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!editing || !editing.name) return;
-    saveProduct(editing);
-    setProducts(getProducts());
-    setShowForm(false);
-    setEditing(null);
+    setSaving(true);
+    setError(null);
+    try {
+      await saveProductDB(editing);
+      await loadProducts();
+      setShowForm(false);
+      setEditing(null);
+    } catch (e: any) {
+      setError(e.message || "Erreur lors de la sauvegarde");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
     if (!confirm("Supprimer ce produit ?")) return;
-    deleteProduct(id);
-    setProducts(getProducts());
+    try {
+      await deleteProductDB(id);
+      await loadProducts();
+    } catch (e: any) {
+      setError(e.message || "Erreur lors de la suppression");
+    }
   }
 
   return (
     <PageTransition>
-      <Topbar title="Produits & Services" subtitle={`${products.length} produit${products.length > 1 ? "s" : ""}`} />
+      <Topbar title="Produits & Services" subtitle={loading ? "Chargement..." : `${products.length} produit${products.length > 1 ? "s" : ""}`} />
       <div className="p-6">
+        {error && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-red-400/10 border border-red-400/20 text-red-400 text-sm font-sans">
+            {error}
+          </div>
+        )}
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div className="relative flex-1 max-w-sm">
@@ -113,7 +148,7 @@ export default function ProductsPage() {
               </div>
               <div className="mt-6 flex justify-end gap-3">
                 <PremiumButton variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Annuler</PremiumButton>
-                <PremiumButton onClick={handleSave} icon={<Check className="w-4 h-4" />}>
+                <PremiumButton onClick={handleSave} loading={saving} icon={<Check className="w-4 h-4" />}>
                   {editing.id ? "Mettre à jour" : "Créer"}
                 </PremiumButton>
               </div>
@@ -122,7 +157,14 @@ export default function ProductsPage() {
         )}
 
         {/* Product list */}
-        {filtered.length === 0 && !showForm ? (
+        {loading ? (
+          <GlassCard hover={false} className="py-20">
+            <div className="text-center">
+              <div className="w-8 h-8 rounded-full border-2 border-gold-400/30 border-t-gold-400 animate-spin mx-auto mb-4" />
+              <p className="text-sm font-sans text-atlantic-200/40">Chargement des produits...</p>
+            </div>
+          </GlassCard>
+        ) : filtered.length === 0 && !showForm ? (
           <GlassCard hover={false} className="py-20">
             <div className="text-center">
               <div className="inline-block animate-float">
