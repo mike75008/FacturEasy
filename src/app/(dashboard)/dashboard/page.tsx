@@ -23,6 +23,7 @@ import {
   getProducts as getProductsDB,
   getReminders as getRemindersDB,
 } from "@/lib/supabase/data";
+import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Document as Doc, Client, Product, Reminder } from "@/types/database";
 
@@ -45,31 +46,64 @@ export default function DashboardPage() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [gamification] = useState(() => getUserGamification());
+  const [chartAnimated, setChartAnimated] = useState(false);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+
+  async function loadData() {
+    try {
+      const [docsData, clientsData, productsData, remindersData] = await Promise.all([
+        getDocumentsDB(),
+        getClientsDB(),
+        getProductsDB(),
+        getRemindersDB(),
+      ]);
+      setDocuments(docsData.length > 0 ? docsData : getDocumentsLS());
+      setClientsList(clientsData.length > 0 ? clientsData : getClientsLS());
+      setProductsList(productsData.length > 0 ? productsData : getProductsLS());
+      setReminders(remindersData.length > 0 ? remindersData : getRemindersLS());
+    } catch {
+      setDocuments(getDocumentsLS());
+      setClientsList(getClientsLS());
+      setProductsList(getProductsLS());
+      setReminders(getRemindersLS());
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const [docsData, clientsData, productsData, remindersData] = await Promise.all([
-          getDocumentsDB(),
-          getClientsDB(),
-          getProductsDB(),
-          getRemindersDB(),
-        ]);
-        setDocuments(docsData.length > 0 ? docsData : getDocumentsLS());
-        setClientsList(clientsData.length > 0 ? clientsData : getClientsLS());
-        setProductsList(productsData.length > 0 ? productsData : getProductsLS());
-        setReminders(remindersData.length > 0 ? remindersData : getRemindersLS());
-      } catch {
-        setDocuments(getDocumentsLS());
-        setClientsList(getClientsLS());
-        setProductsList(getProductsLS());
-        setReminders(getRemindersLS());
-      } finally {
-        setLoading(false);
-      }
-    }
     loadData();
+
+    // Supabase Realtime — écoute chaque changement sur documents
+    const supabase = createClient();
+    const channel = supabase
+      .channel("dashboard-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "documents" },
+        () => {
+          // Rechargement des documents uniquement (stats recalculées auto)
+          getDocumentsDB().then((docs) => {
+            if (docs.length > 0) setDocuments(docs);
+          });
+        }
+      )
+      .subscribe((status) => {
+        setRealtimeConnected(status === "SUBSCRIBED");
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      const t = setTimeout(() => setChartAnimated(true), 200);
+      return () => clearTimeout(t);
+    }
+  }, [loading]);
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -204,6 +238,12 @@ export default function DashboardPage() {
       <Topbar
         title="Tableau de bord"
         subtitle={`${stats.invoiceCount} facture${stats.invoiceCount > 1 ? "s" : ""} • ${stats.clientCount} client${stats.clientCount > 1 ? "s" : ""}`}
+        extra={
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-atlantic-800/50 border border-atlantic-600/20">
+            <div className={`w-1.5 h-1.5 rounded-full ${realtimeConnected ? "bg-emerald-400 animate-pulse" : "bg-atlantic-400/30"}`} />
+            <span className="text-[10px] font-sans text-atlantic-200/40">{realtimeConnected ? "temps réel" : "connexion..."}</span>
+          </div>
+        }
       />
 
       <div className="p-6 space-y-6">
@@ -345,33 +385,57 @@ export default function DashboardPage() {
                 <span className="text-xs font-sans text-atlantic-200/40 px-3 py-1 rounded-full bg-atlantic-800/50">12 derniers mois</span>
               </div>
 
-              {stats.monthlyCA.every((v) => v === 0) ? (
-                <div className="h-48 flex items-center justify-center">
-                  <p className="text-sm font-sans text-atlantic-200/30">Les données apparaîtront avec vos premiers paiements</p>
+              {/* Graphique toujours visible — animation en cascade */}
+              <div className="relative">
+                {/* Lignes de grille */}
+                <div className="absolute inset-x-0 top-0 h-48 flex flex-col justify-between pointer-events-none">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="border-t border-atlantic-700/20 w-full" />
+                  ))}
                 </div>
-              ) : (
-                <>
-                  <div className="flex items-end gap-2 h-48">
-                    {stats.monthlyCA.map((val, i) => (
-                      <div
-                        key={i}
-                        className="flex-1 relative group"
-                        style={{ height: maxCA > 0 ? `${(val / maxCA) * 100}%` : "0%" }}
-                      >
-                        <div className="absolute inset-0 rounded-t-md bg-gradient-to-t from-gold-400/40 to-gold-400/10 group-hover:from-gold-400/60 group-hover:to-gold-400/20 transition-colors duration-300" />
-                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-atlantic-800 text-gold-400 text-xs font-sans px-2 py-1 rounded whitespace-nowrap">
-                          {formatCurrency(val)}
-                        </div>
+
+                <div className="flex items-end gap-1.5 h-48 relative">
+                  {stats.monthlyCA.map((val, i) => {
+                    const heightPct = maxCA > 0 ? (val / maxCA) * 100 : 0;
+                    const isCurrentMonth = i === 11;
+                    const animatedHeight = chartAnimated
+                      ? val > 0 ? `${heightPct}%` : "3%"
+                      : "0%";
+                    return (
+                      <div key={i} className="flex-1 h-full relative group flex items-end">
+                        <div
+                          className={`w-full rounded-t-md transition-colors duration-300 ${
+                            isCurrentMonth
+                              ? "bg-gradient-to-t from-gold-400/70 to-gold-400/25 group-hover:from-gold-400/90 group-hover:to-gold-400/40"
+                              : "bg-gradient-to-t from-gold-400/40 to-gold-400/10 group-hover:from-gold-400/60 group-hover:to-gold-400/20"
+                          }`}
+                          style={{
+                            height: animatedHeight,
+                            transition: `height 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 45}ms`,
+                          }}
+                        />
+                        {val > 0 && (
+                          <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-atlantic-800 border border-gold-400/20 text-gold-400 text-xs font-sans px-2 py-1 rounded whitespace-nowrap pointer-events-none z-10">
+                            {formatCurrency(val)}
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                  <div className="flex gap-2 mt-2">
-                    {displayMonths.map((m, i) => (
-                      <div key={i} className="flex-1 text-center text-[10px] font-sans text-atlantic-200/30">{m}</div>
-                    ))}
-                  </div>
-                </>
-              )}
+                    );
+                  })}
+                </div>
+
+                <div className="flex gap-1.5 mt-2">
+                  {displayMonths.map((m, i) => (
+                    <div key={i} className={`flex-1 text-center text-[10px] font-sans ${i === 11 ? "text-gold-400/60 font-semibold" : "text-atlantic-200/30"}`}>{m}</div>
+                  ))}
+                </div>
+
+                {stats.monthlyCA.every((v) => v === 0) && (
+                  <p className="text-center text-xs font-sans text-atlantic-200/20 mt-3">
+                    Les données CA apparaîtront avec vos premiers paiements
+                  </p>
+                )}
+              </div>
             </GlassCard>
           </div>
 

@@ -10,9 +10,10 @@ import type { AppNotification, NotificationColor } from "@/lib/supabase/data";
 interface TopbarProps {
   title: string;
   subtitle?: string;
+  extra?: React.ReactNode;
 }
 
-export function Topbar({ title, subtitle }: TopbarProps) {
+export function Topbar({ title, subtitle, extra }: TopbarProps) {
   const router = useRouter();
   const [userName, setUserName] = useState("Utilisateur");
   const [userEmail, setUserEmail] = useState("");
@@ -83,11 +84,14 @@ export function Topbar({ title, subtitle }: TopbarProps) {
   return (
     <>
     <header className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b border-gold-400/10 bg-atlantic-900/40 backdrop-blur-xl">
-      <div>
-        <h1 className="text-2xl font-display font-bold text-white">{title}</h1>
-        {subtitle && (
-          <p className="text-sm font-sans text-atlantic-200/40 mt-0.5">{subtitle}</p>
-        )}
+      <div className="flex items-center gap-3">
+        <div>
+          <h1 className="text-2xl font-display font-bold text-white">{title}</h1>
+          {subtitle && (
+            <p className="text-sm font-sans text-atlantic-200/40 mt-0.5">{subtitle}</p>
+          )}
+        </div>
+        {extra && <div className="ml-2">{extra}</div>}
       </div>
 
       <div className="flex items-center gap-2">
