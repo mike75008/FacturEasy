@@ -446,7 +446,12 @@ export default function DashboardPage() {
                 </div>
               )}
             </GlassCard>
-            <GlassCard hover={false} className="flex-1"><div /></GlassCard>
+            <GlassCard hover={false} className="flex-1">
+              <div className="flex items-center gap-2 mb-4">
+                <Sparkles className="w-5 h-5 text-gold-400" />
+                <h3 className="text-lg font-display font-semibold">Suggestions & Prédictions IA</h3>
+              </div>
+            </GlassCard>
           </div>
         </div>
 

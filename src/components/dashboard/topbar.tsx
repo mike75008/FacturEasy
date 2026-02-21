@@ -36,6 +36,18 @@ export function Topbar({ title, subtitle, extra }: TopbarProps) {
       }
     });
     computeNotifications().then(setNotifications).catch(() => {});
+
+    // Realtime — recharge les notifs à chaque changement sur documents
+    const channel = supabase
+      .channel("topbar-notifs")
+      .on("postgres_changes", { event: "*", schema: "public", table: "documents" }, () => {
+        computeNotifications().then(setNotifications).catch(() => {});
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
