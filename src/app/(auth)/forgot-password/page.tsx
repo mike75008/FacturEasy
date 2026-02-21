@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Mail, ArrowLeft, Send } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { PremiumCard } from "@/components/premium/premium-card";
 import { PremiumInput } from "@/components/premium/premium-input";
 import { PremiumButton } from "@/components/premium/premium-button";
@@ -17,10 +18,20 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    setTimeout(() => {
-      setSuccess(true);
+
+    const supabase = createClient();
+    const { error: authError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/login`,
+    });
+
+    if (authError) {
+      setError(authError.message);
       setLoading(false);
-    }, 800);
+      return;
+    }
+
+    setSuccess(true);
+    setLoading(false);
   }
 
   return (

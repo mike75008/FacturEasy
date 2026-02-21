@@ -44,29 +44,40 @@ export default function RegisterPage() {
     const { data, error: authError } = await supabase.auth.signUp({
       email: formData.email,
       password: formData.password,
-      options: {
-        data: {
-          full_name: formData.fullName,
-          company_name: formData.companyName,
-        },
-      },
+      options: { data: { full_name: formData.fullName } },
     });
 
     if (authError) {
-      setError(authError.message);
+      const msg = authError.message.includes("already registered")
+        ? "Un compte existe déjà avec cet email"
+        : authError.message;
+      setError(msg);
       setLoading(false);
       return;
     }
 
-    // Compte créé — avec ou sans confirmation email on entre
-    if (data.user) {
-      router.push("/dashboard");
-      router.refresh();
+    if (!data.user) {
+      setError("Vérifiez votre email pour confirmer votre compte");
+      setLoading(false);
       return;
     }
 
-    setError("Vérifiez votre email pour confirmer votre compte");
-    setLoading(false);
+    // Créer org + user + séquences via fonction SECURITY DEFINER (bypass RLS)
+    const { error: setupError } = await supabase.rpc("setup_new_account", {
+      p_auth_id: data.user.id,
+      p_email: formData.email,
+      p_full_name: formData.fullName,
+      p_company_name: formData.companyName,
+    });
+
+    if (setupError) {
+      setError("Erreur lors de la création du compte : " + setupError.message);
+      setLoading(false);
+      return;
+    }
+
+    router.push("/dashboard");
+    router.refresh();
   }
 
   return (

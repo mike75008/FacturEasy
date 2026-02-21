@@ -1,0 +1,68 @@
+
+> facturation-universelle@0.1.0 build
+> next build
+
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of C:\Users\hagbe\package-lock.json as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles: 
+   * C:\Users\hagbe\Downloads\facturation template universelle\package-lock.json
+   * C:\Users\hagbe\Downloads\package-lock.json
+
+   ▲ Next.js 15.5.12
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 37.4s
+   Linting and checking validity of types ...
+
+./src/app/(dashboard)/settings/page.tsx
+202:19  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+   Collecting page data ...
+(node:31640) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:45772) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:33696) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+   Generating static pages (0/18) ...
+(node:38524) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+   Generating static pages (4/18) 
+   Generating static pages (8/18) 
+   Generating static pages (13/18) 
+ ✓ Generating static pages (18/18)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                 Size  First Load JS
+┌ ○ /                                    6.75 kB         120 kB
+├ ○ /_not-found                            995 B         103 kB
+├ ƒ /api/ai/analyze-risk                   133 B         102 kB
+├ ƒ /api/ai/chat                           133 B         102 kB
+├ ƒ /api/ai/generate-reminder              133 B         102 kB
+├ ƒ /api/test-auth                         133 B         102 kB
+├ ○ /clients                              5.6 kB         177 kB
+├ ○ /dashboard                            7.5 kB         179 kB
+├ ○ /documents                           9.06 kB         194 kB
+├ ○ /forgot-password                     2.57 kB         169 kB
+├ ○ /login                               2.62 kB         169 kB
+├ ○ /monitoring                          4.81 kB         176 kB
+├ ○ /products                            4.05 kB         171 kB
+├ ○ /register                             3.3 kB         170 kB
+├ ○ /reminders                           4.89 kB         176 kB
+└ ○ /settings                            4.86 kB         190 kB
++ First Load JS shared by all             102 kB
+  ├ chunks/255-ebd51be49873d76c.js         46 kB
+  ├ chunks/4bd1b696-c023c6e3521b1417.js  54.2 kB
+  └ other shared chunks (total)          2.04 kB
+
+
+ƒ Middleware                             81.5 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

@@ -21,8 +21,22 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    // Accès direct temporaire pendant config Supabase
+    const supabase = createClient();
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (authError) {
+      const msg = authError.message.includes("Invalid login credentials")
+        ? "Email ou mot de passe incorrect"
+        : authError.message.includes("Email not confirmed")
+        ? "Confirmez votre email avant de vous connecter"
+        : authError.message;
+      setError(msg);
+      setLoading(false);
+      return;
+    }
+
     router.push("/dashboard");
+    router.refresh();
   }
 
   return (
