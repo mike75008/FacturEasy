@@ -184,45 +184,6 @@ export function Sidebar() {
         </div>
       </nav>
 
-      {/* AI Assistant */}
-      <div className="px-3 py-2">
-        <div
-          className={cn(
-            "flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer",
-            "bg-gradient-to-r from-gold-400/[0.08] to-atlantic-600/20",
-            "border border-gold-400/15 hover:border-gold-400/30",
-            "transition-all duration-250",
-            !showLabels && !isMobile && "justify-center"
-          )}
-        >
-          <div className="relative flex-shrink-0">
-            <Brain className="w-5 h-5 text-gold-400" />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-          </div>
-          <div
-            className="flex-1 min-w-0 overflow-hidden"
-            style={{
-              maxWidth: showLabels || isMobile ? "160px" : "0px",
-              opacity: showLabels || isMobile ? 1 : 0,
-              transition: `max-width 0.3s ${SMOOTH}, opacity 0.2s ease`,
-            }}
-          >
-            <p className="text-xs font-sans font-semibold text-gold-400 whitespace-nowrap">Assistant IA</p>
-            <p className="text-[10px] font-sans text-atlantic-200/40 whitespace-nowrap">En ligne</p>
-          </div>
-          <div
-            style={{
-              maxWidth: showLabels || isMobile ? "20px" : "0px",
-              opacity: showLabels || isMobile ? 1 : 0,
-              overflow: "hidden",
-              transition: `max-width 0.3s ${SMOOTH}, opacity 0.2s ease`,
-            }}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-gold-400/50" />
-          </div>
-        </div>
-      </div>
-
       {/* Logout */}
       <div className="p-3 border-t border-gold-400/10">
         <button

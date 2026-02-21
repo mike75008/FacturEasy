@@ -4,7 +4,7 @@ import { PROMPTS } from "@/lib/ai/prompts";
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, history = [] } = await request.json();
+    const { message, history = [], systemContext } = await request.json();
 
     if (!message) {
       return NextResponse.json(
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     const messages = [
-      { role: "system" as const, content: PROMPTS.CHAT_ASSISTANT.system },
+      { role: "system" as const, content: systemContext || PROMPTS.CHAT_ASSISTANT.system },
       ...history.map((h: { role: string; content: string }) => ({
         role: h.role as "user" | "assistant",
         content: h.content,

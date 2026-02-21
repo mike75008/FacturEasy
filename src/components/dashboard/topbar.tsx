@@ -81,6 +81,7 @@ export function Topbar({ title, subtitle }: TopbarProps) {
     .slice(0, 2);
 
   return (
+    <>
     <header className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b border-gold-400/10 bg-atlantic-900/40 backdrop-blur-xl">
       <div>
         <h1 className="text-2xl font-display font-bold text-white">{title}</h1>
@@ -90,7 +91,11 @@ export function Topbar({ title, subtitle }: TopbarProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        <button className="p-2.5 rounded-xl text-atlantic-200/40 hover:text-gold-400 hover:bg-gold-400/10 transition-all duration-200">
+        <button
+          onClick={() => (window as unknown as Record<string, unknown>).__openSearch?.()}
+          className="p-2.5 rounded-xl text-atlantic-200/40 hover:text-gold-400 hover:bg-gold-400/10 transition-all duration-200"
+          title="Recherche (Ctrl+K)"
+        >
           <Search className="w-5 h-5" />
         </button>
         <button className="p-2.5 rounded-xl text-atlantic-200/40 hover:text-gold-400 hover:bg-gold-400/10 transition-all duration-200 relative">
@@ -174,5 +179,7 @@ export function Topbar({ title, subtitle }: TopbarProps) {
         </div>
       </div>
     </header>
+
+    </>
   );
 }
