@@ -348,9 +348,64 @@ export default function DashboardPage() {
             </GlassCard>
           </div>
 
-          {/* Rectangle 2 — vide */}
+          {/* Rectangle 2 — Donut */}
           <div className="h-full">
-            <GlassCard hover={false} className="h-full" />
+            <GlassCard hover={false} className="h-full">
+              {(() => {
+                const dData = [
+                  { label: "CA encaissé", value: Math.max(stats.totalCA, 0.01), display: formatCurrency(stats.totalCA), color: "#34d399" },
+                  { label: "En attente", value: Math.max(stats.pendingTotal, 0.01), display: formatCurrency(stats.pendingTotal), color: "#d4af37" },
+                  { label: "Clients actifs", value: Math.max(stats.clientCount * 150, 0.01), display: `${stats.clientCount} clients`, color: "#93c5fd" },
+                  { label: "Taux paiement", value: Math.max(stats.paymentRate * 40, 0.01), display: `${Math.round(stats.paymentRate)}%`, color: "#a78bfa" },
+                ];
+                const dTotal = dData.reduce((s, d) => s + d.value, 0) || 1;
+                const R = 50; const CX = 64; const CY = 64;
+                const CIRC = 2 * Math.PI * R;
+                let cum = 0;
+                const arcs = dData.map((seg) => {
+                  const len = (seg.value / dTotal) * CIRC;
+                  const off = -cum;
+                  cum += len;
+                  return { ...seg, len, off };
+                });
+                return (
+                  <>
+                    <div className="flex items-center gap-2 mb-4">
+                      <BarChart3 className="w-5 h-5 text-gold-400" />
+                      <h3 className="text-lg font-display font-semibold">Aperçu</h3>
+                    </div>
+                    <div className="flex justify-center mb-5">
+                      <div className="relative w-36 h-36">
+                        <svg className="w-36 h-36 -rotate-90" viewBox="0 0 128 128">
+                          <circle cx={CX} cy={CY} r={R} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="14" />
+                          {arcs.map((seg) => (
+                            <circle key={seg.label} cx={CX} cy={CY} r={R} fill="none"
+                              stroke={seg.color} strokeWidth="14" strokeLinecap="butt"
+                              strokeDasharray={`${seg.len} ${CIRC - seg.len}`}
+                              strokeDashoffset={seg.off}
+                              className="transition-all duration-[1.5s] ease-out"
+                            />
+                          ))}
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <p className="text-[9px] font-sans text-atlantic-200/40">total</p>
+                          <p className="text-xs font-display font-bold text-gold-400">{formatCurrency(stats.totalCA + stats.pendingTotal)}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {dData.map((seg) => (
+                        <div key={seg.label} className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: seg.color }} />
+                          <span className="text-[10px] font-sans text-atlantic-200/50 flex-1">{seg.label}</span>
+                          <span className="text-[10px] font-sans font-semibold text-white">{seg.display}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
+            </GlassCard>
           </div>
 
           {/* Documents récents + rectangle vide */}
