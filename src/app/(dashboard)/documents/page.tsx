@@ -30,7 +30,10 @@ import {
   generateDocumentNumber as generateDocumentNumberDB,
   getClients as getClientsDB,
   getProducts as getProductsDB,
+  getOrganization as getOrganizationDB,
 } from "@/lib/supabase/data";
+import { downloadInvoicePDF } from "@/components/pdf/invoice-pdf";
+import type { Organization } from "@/types/database";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { calculateLineTotals as calcLine } from "@/lib/validators";
 import type { Document as Doc, DocumentLine, Client, Product } from "@/types/database";
@@ -509,6 +512,7 @@ export default function DocumentsPage() {
           <DocumentDetail
             doc={selectedDoc}
             lines={selectedLines}
+            clients={clients}
             getClientName={getClientName}
             onBack={() => setView("list")}
             onUpdateStatus={(s) => { updateStatus(selectedDoc, s); }}
@@ -626,9 +630,10 @@ function InvoicePreview({ doc, lines, clientName }: { doc: Doc; lines: DocumentL
 // Document Detail with Validation N+1
 // ═══════════════════════════════════════════
 
-function DocumentDetail({ doc, lines, getClientName, onBack, onUpdateStatus, onDelete, onRefresh }: {
+function DocumentDetail({ doc, lines, clients, getClientName, onBack, onUpdateStatus, onDelete, onRefresh }: {
   doc: Doc;
   lines: DocumentLine[];
+  clients: Client[];
   getClientName: (id: string) => string;
   onBack: () => void;
   onUpdateStatus: (status: string) => void;
@@ -640,11 +645,28 @@ function DocumentDetail({ doc, lines, getClientName, onBack, onUpdateStatus, onD
   const [validationComment, setValidationComment] = useState("");
   const [showValidation, setShowValidation] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  useEffect(() => {
+    getOrganizationDB().then(setOrganization);
+  }, []);
 
   useEffect(() => {
     setVerification(verifyDocument(doc.id));
     setValidations(getDocumentValidations(doc.id));
   }, [doc.id, doc.status]);
+
+  async function handleDownloadPDF() {
+    if (!organization) return;
+    const client = clients.find((c) => c.id === doc.client_id) || null;
+    setPdfLoading(true);
+    try {
+      await downloadInvoicePDF({ doc, lines, organization, client });
+    } finally {
+      setPdfLoading(false);
+    }
+  }
 
   function handleValidate(action: "approve" | "reject" | "request_changes") {
     addDocumentValidation({
@@ -692,6 +714,9 @@ function DocumentDetail({ doc, lines, getClientName, onBack, onUpdateStatus, onD
                 )}
                 <PremiumButton variant="outline" size="sm" icon={<Printer className="w-3.5 h-3.5" />} onClick={() => setShowPreview(!showPreview)}>
                   {showPreview ? "Données" : "Aperçu"}
+                </PremiumButton>
+                <PremiumButton variant="outline" size="sm" icon={<Download className="w-3.5 h-3.5" />} onClick={handleDownloadPDF} loading={pdfLoading} disabled={!organization}>
+                  PDF
                 </PremiumButton>
                 <PremiumButton variant="ghost" size="sm" onClick={onDelete} className="text-red-400 hover:bg-red-400/10"><Trash2 className="w-3.5 h-3.5" /></PremiumButton>
               </div>
