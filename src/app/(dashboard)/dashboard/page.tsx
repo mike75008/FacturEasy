@@ -230,6 +230,30 @@ export default function DashboardPage() {
   const levelColors = LEVEL_COLORS[gamification.level];
 
   const gaugeRate = stats.invoiceCount > 0 ? Math.min(Math.round(stats.paymentRate), 100) : 0;
+
+  // Donut — calculs prévisionnels
+  const last3Avg = Math.round(stats.monthlyCA.slice(-3).reduce((a, b) => a + b, 0) / 3);
+  const prev3Avg = Math.round(stats.monthlyCA.slice(-6, -3).reduce((a, b) => a + b, 0) / 3);
+  const growthRate = prev3Avg > 0 ? (last3Avg - prev3Avg) / prev3Avg : 0;
+  const previsionnel = last3Avg;
+  const predictionIA = Math.max(0, Math.round(last3Avg * (1 + Math.max(-0.5, Math.min(0.5, growthRate)))));
+  const donutSegments = [
+    { label: "Encaissé", value: stats.totalCA, color: "#34d399" },
+    { label: "En attente", value: stats.pendingTotal, color: "#f59e0b" },
+    { label: "En retard", value: stats.overdueTotal, color: "#f97316" },
+    { label: "Prévisionnel", value: previsionnel, color: "#a78bfa" },
+    { label: "Prédiction IA", value: predictionIA, color: "#d4af37" },
+  ];
+  const donutTotal = donutSegments.reduce((s, d) => s + d.value, 0) || 1;
+  const donutR = 38; const donutCx = 60; const donutCy = 60;
+  const donutC = 2 * Math.PI * donutR;
+  let cumulativeArc = 0;
+  const donutArcs = donutSegments.map((seg) => {
+    const segLen = (seg.value / donutTotal) * donutC;
+    const dashOffset = -cumulativeArc;
+    cumulativeArc += segLen;
+    return { ...seg, segLen, dashOffset };
+  });
   const circumference = 2 * Math.PI * 40;
   const gaugeOffset = circumference * (1 - gaugeRate / 100);
 
@@ -292,9 +316,36 @@ export default function DashboardPage() {
 
         {/* Ligne 1 : VIDE 2/3 + Documents récents 1/3 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Rectangle 1 — vide */}
+          {/* Rectangle 1 — Lignes de performance */}
           <div className="h-full">
-            <GlassCard hover={false} className="h-full" />
+            <GlassCard hover={false} className="h-full">
+              <div className="flex items-center gap-2 mb-5">
+                <TrendingUp className="w-5 h-5 text-gold-400" />
+                <h3 className="text-lg font-display font-semibold">Performances</h3>
+              </div>
+              <div className="space-y-4">
+                {[
+                  { label: "ROI", value: gaugeRate, display: `${gaugeRate}%`, color: "#d4af37" },
+                  { label: "Estimation", value: donutTotal > 0 ? Math.min(Math.round((previsionnel / donutTotal) * 100), 100) : 0, display: formatCurrency(previsionnel), color: "#f9a8d4" },
+                  { label: "Prédiction IA", value: donutTotal > 0 ? Math.min(Math.round((predictionIA / donutTotal) * 100), 100) : 0, display: formatCurrency(predictionIA), color: "#93c5fd" },
+                  { label: "CA encaissé", value: donutTotal > 0 ? Math.min(Math.round((stats.totalCA / donutTotal) * 100), 100) : 0, display: formatCurrency(stats.totalCA), color: "#f5f0e8" },
+                  { label: "Clients actifs", value: Math.min(stats.clientCount * 10, 100), display: `${stats.clientCount} clients`, color: "#92400e" },
+                ].map(({ label, value, display, color }) => (
+                  <div key={label}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-sans text-atlantic-200/60">{label}</span>
+                      <span className="text-xs font-sans font-semibold" style={{ color }}>{display}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-atlantic-800/50 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-[1.5s] ease-out"
+                        style={{ width: `${value}%`, backgroundColor: color }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
           </div>
 
           {/* Rectangle 2 — vide */}
@@ -302,8 +353,8 @@ export default function DashboardPage() {
             <GlassCard hover={false} className="h-full" />
           </div>
 
-          {/* Documents récents */}
-          <div>
+          {/* Documents récents + rectangle vide */}
+          <div className="flex flex-col gap-6">
             <GlassCard hover={false}>
               <div className="flex items-center gap-2 mb-5">
                 <Clock className="w-5 h-5 text-gold-400" />
@@ -340,6 +391,7 @@ export default function DashboardPage() {
                 </div>
               )}
             </GlassCard>
+            <GlassCard hover={false} className="flex-1"><div /></GlassCard>
           </div>
         </div>
 
