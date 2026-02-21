@@ -25,21 +25,11 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
-
-  const isAuthPage = request.nextUrl.pathname.startsWith("/login") ||
-    request.nextUrl.pathname.startsWith("/register") ||
-    request.nextUrl.pathname.startsWith("/forgot-password");
-
-  const isDashboard = request.nextUrl.pathname.startsWith("/dashboard") ||
-    request.nextUrl.pathname.startsWith("/clients") ||
-    request.nextUrl.pathname.startsWith("/documents") ||
-    request.nextUrl.pathname.startsWith("/products") ||
-    request.nextUrl.pathname.startsWith("/reminders") ||
-    request.nextUrl.pathname.startsWith("/monitoring") ||
-    request.nextUrl.pathname.startsWith("/settings");
-
-  // Auth Supabase en cours de configuration — accès libre temporaire
+  try {
+    await supabase.auth.getUser();
+  } catch {
+    // Supabase inaccessible : on laisse passer, l'app gère le fallback localStorage
+  }
 
   return supabaseResponse;
 }

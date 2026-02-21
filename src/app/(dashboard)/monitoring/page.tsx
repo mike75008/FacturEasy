@@ -12,10 +12,14 @@ import {
 } from "lucide-react";
 import {
   runAnomalyDetection, getAnomalies, resolveAnomaly,
-  getDocuments, getClients, getDashboardStats,
+  getDocuments as getDocumentsLS,
 } from "@/lib/local-storage";
 import type { LocalAnomaly } from "@/lib/local-storage";
+import {
+  getDocuments as getDocumentsDB,
+} from "@/lib/supabase/data";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
+import type { Document as Doc } from "@/types/database";
 
 const SEVERITY_CONFIG = {
   info: { color: "text-blue-400", bg: "bg-blue-400/10", border: "border-blue-400/20", icon: Eye },
@@ -33,15 +37,32 @@ const TYPE_CONFIG: Record<string, { icon: React.ComponentType<{ className?: stri
 
 export default function MonitoringPage() {
   const [anomalies, setAnomalies] = useState<LocalAnomaly[]>([]);
+  const [documents, setDocuments] = useState<Doc[]>([]);
   const [scanning, setScanning] = useState(false);
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "active" | "resolved">("all");
-  const [stats, setStats] = useState<ReturnType<typeof getDashboardStats> | null>(null);
 
   useEffect(() => {
     setAnomalies(getAnomalies());
-    setStats(getDashboardStats());
+    async function loadDocs() {
+      try {
+        const data = await getDocumentsDB();
+        setDocuments(data.length > 0 ? data : getDocumentsLS());
+      } catch {
+        setDocuments(getDocumentsLS());
+      }
+    }
+    loadDocs();
   }, []);
+
+  const invoiceCount = documents.filter((d) => d.type === "facture").length;
+  const overdueCount = documents.filter((d) =>
+    d.type === "facture" &&
+    d.status !== "paye" &&
+    d.status !== "annule" &&
+    !!d.due_date &&
+    new Date(d.due_date) < new Date()
+  ).length;
 
   const filtered = useMemo(() => {
     let list = anomalies;
@@ -155,7 +176,7 @@ export default function MonitoringPage() {
             },
             {
               label: "Score santé",
-              value: stats ? (stats.overdueCount === 0 && stats.invoiceCount > 0 ? 100 : stats.invoiceCount > 0 ? Math.max(0, 100 - stats.overdueCount * 15 - criticalCount * 20) : 100) : 100,
+              value: invoiceCount > 0 ? Math.max(0, 100 - overdueCount * 15 - criticalCount * 20) : 100,
               icon: Shield,
               color: "text-gold-400",
               bg: "bg-gold-400/10",

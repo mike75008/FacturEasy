@@ -2,7 +2,7 @@
 // Chaque fonction utilise le client browser avec RLS automatique
 
 import { createClient } from "./client";
-import type { Client, Product, Organization, NumberingSequence, Reminder } from "@/types/database";
+import type { Client, Product, Organization, NumberingSequence, Reminder, Document as DocRecord, DocumentLine } from "@/types/database";
 
 // ─── Helper : récupère l'org_id de l'utilisateur connecté ───────────────────
 
@@ -291,4 +291,154 @@ export async function markReminderSent(id: string): Promise<void> {
     .eq("id", id);
 
   if (error) throw error;
+}
+
+// ─── DOCUMENTS ────────────────────────────────────────────────────────────────
+
+export async function getDocuments(): Promise<DocRecord[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("documents")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function saveDocument(doc: Partial<DocRecord>): Promise<DocRecord> {
+  const supabase = createClient();
+
+  if (doc.id) {
+    const { data, error } = await supabase
+      .from("documents")
+      .update({
+        client_id: doc.client_id,
+        type: doc.type,
+        status: doc.status,
+        number: doc.number,
+        date: doc.date,
+        due_date: doc.due_date ?? null,
+        total_ht: doc.total_ht ?? 0,
+        total_tva: doc.total_tva ?? 0,
+        total_ttc: doc.total_ttc ?? 0,
+        discount_percent: doc.discount_percent ?? 0,
+        discount_amount: doc.discount_amount ?? 0,
+        notes: doc.notes ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", doc.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } else {
+    const orgId = await getCurrentOrgId();
+    if (!orgId) throw new Error("Utilisateur non authentifié");
+
+    const { data, error } = await supabase
+      .from("documents")
+      .insert({
+        organization_id: orgId,
+        client_id: doc.client_id ?? "",
+        type: doc.type ?? "facture",
+        status: doc.status ?? "brouillon",
+        number: doc.number ?? "",
+        date: doc.date ?? new Date().toISOString().split("T")[0],
+        due_date: doc.due_date ?? null,
+        total_ht: doc.total_ht ?? 0,
+        total_tva: doc.total_tva ?? 0,
+        total_ttc: doc.total_ttc ?? 0,
+        discount_percent: doc.discount_percent ?? 0,
+        discount_amount: doc.discount_amount ?? 0,
+        notes: doc.notes ?? null,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+}
+
+export async function deleteDocument(id: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("documents").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function getDocumentLines(documentId: string): Promise<DocumentLine[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("document_lines")
+    .select("*")
+    .eq("document_id", documentId)
+    .order("position", { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function replaceDocumentLines(
+  documentId: string,
+  lines: Partial<DocumentLine>[]
+): Promise<void> {
+  const supabase = createClient();
+
+  const { error: delError } = await supabase
+    .from("document_lines")
+    .delete()
+    .eq("document_id", documentId);
+  if (delError) throw delError;
+
+  if (lines.length === 0) return;
+
+  const { error: insError } = await supabase
+    .from("document_lines")
+    .insert(
+      lines.map((l, i) => ({
+        document_id: documentId,
+        product_id: l.product_id ?? null,
+        description: l.description ?? "",
+        quantity: l.quantity ?? 1,
+        unit: l.unit ?? "unité",
+        unit_price: l.unit_price ?? 0,
+        tva_rate: l.tva_rate ?? 20,
+        discount_percent: l.discount_percent ?? 0,
+        total_ht: l.total_ht ?? 0,
+        total_tva: l.total_tva ?? 0,
+        total_ttc: l.total_ttc ?? 0,
+        position: l.position ?? i,
+      }))
+    );
+  if (insError) throw insError;
+}
+
+export async function generateDocumentNumber(type: string): Promise<string> {
+  const orgId = await getCurrentOrgId();
+  if (!orgId) throw new Error("Utilisateur non authentifié");
+
+  const supabase = createClient();
+  const { data: seq, error } = await supabase
+    .from("numbering_sequences")
+    .select("*")
+    .eq("organization_id", orgId)
+    .eq("document_type", type)
+    .single();
+
+  if (error || !seq) {
+    const year = new Date().getFullYear();
+    const prefix = type.slice(0, 3).toUpperCase();
+    return `${prefix}-${year}-00001`;
+  }
+
+  const nextNum = seq.current_number + 1;
+
+  await supabase
+    .from("numbering_sequences")
+    .update({ current_number: nextNum, updated_at: new Date().toISOString() })
+    .eq("id", seq.id);
+
+  return `${seq.prefix}-${seq.fiscal_year}-${String(nextNum).padStart(5, "0")}`;
 }

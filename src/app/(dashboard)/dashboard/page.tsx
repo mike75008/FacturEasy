@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Topbar } from "@/components/dashboard/topbar";
 import { GlassCard } from "@/components/premium/glass-card";
 import { AnimatedCounter } from "@/components/premium/animated-counter";
@@ -11,11 +11,20 @@ import {
   Award, Shield, Crown, Zap, Trophy, Rocket, Star,
 } from "lucide-react";
 import {
-  getDashboardStats, getDocuments, getClients, getReminders,
-  getUserGamification, getAuditLogs,
+  getUserGamification,
+  getDocuments as getDocumentsLS,
+  getClients as getClientsLS,
+  getProducts as getProductsLS,
+  getReminders as getRemindersLS,
 } from "@/lib/local-storage";
+import {
+  getDocuments as getDocumentsDB,
+  getClients as getClientsDB,
+  getProducts as getProductsDB,
+  getReminders as getRemindersDB,
+} from "@/lib/supabase/data";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { Document as Doc } from "@/types/database";
+import type { Document as Doc, Client, Product, Reminder } from "@/types/database";
 
 const LEVEL_COLORS = {
   bronze: { bg: "from-amber-700/20 to-amber-700/5", text: "text-amber-600", border: "border-amber-600/30" },
@@ -30,27 +39,100 @@ const BADGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
 };
 
 export default function DashboardPage() {
-  // localStorage est synchrone — on lit directement, zéro délai, zéro double render
-  const [stats] = useState(() => getDashboardStats());
+  const [documents, setDocuments] = useState<Doc[]>([]);
+  const [clientsList, setClientsList] = useState<Client[]>([]);
+  const [productsList, setProductsList] = useState<Product[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [loading, setLoading] = useState(true);
   const [gamification] = useState(() => getUserGamification());
-  const [documents] = useState(() => getDocuments());
-  const mounted = true;
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [docsData, clientsData, productsData, remindersData] = await Promise.all([
+          getDocumentsDB(),
+          getClientsDB(),
+          getProductsDB(),
+          getRemindersDB(),
+        ]);
+        setDocuments(docsData.length > 0 ? docsData : getDocumentsLS());
+        setClientsList(clientsData.length > 0 ? clientsData : getClientsLS());
+        setProductsList(productsData.length > 0 ? productsData : getProductsLS());
+        setReminders(remindersData.length > 0 ? remindersData : getRemindersLS());
+      } catch {
+        setDocuments(getDocumentsLS());
+        setClientsList(getClientsLS());
+        setProductsList(getProductsLS());
+        setReminders(getRemindersLS());
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  const stats = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const invoices = documents.filter((d) => d.type === "facture");
+    const quotes = documents.filter((d) => d.type === "devis");
+    const paidInvoices = invoices.filter((d) => d.status === "paye");
+    const pendingInvoices = invoices.filter((d) => d.status === "envoye" || d.status === "valide");
+    const overdueInvoices = invoices.filter(
+      (d) => d.status !== "paye" && d.status !== "annule" && !!d.due_date && new Date(d.due_date) < now
+    );
+
+    const totalCA = paidInvoices.reduce((s, d) => s + d.total_ttc, 0);
+    const pendingTotal = pendingInvoices.reduce((s, d) => s + d.total_ttc, 0);
+    const overdueTotal = overdueInvoices.reduce((s, d) => s + d.total_ttc, 0);
+    const paymentRate = invoices.length > 0 ? (paidInvoices.length / invoices.length) * 100 : 0;
+
+    const monthlyCA = Array(12).fill(0) as number[];
+    paidInvoices.forEach((d) => {
+      const date = new Date(d.date);
+      const monthsAgo = (currentYear - date.getFullYear()) * 12 + (currentMonth - date.getMonth());
+      if (monthsAgo >= 0 && monthsAgo < 12) monthlyCA[11 - monthsAgo] += d.total_ttc;
+    });
+
+    const convertedQuotes = quotes.filter(
+      (d) => d.status === "paye" || d.status === "envoye" || d.status === "valide"
+    );
+    const quoteConversion = quotes.length > 0 ? Math.round((convertedQuotes.length / quotes.length) * 100) : 0;
+    const sentRemindersCount = reminders.filter((r) => r.sent_at).length;
+
+    return {
+      totalCA: Math.round(totalCA * 100) / 100,
+      invoiceCount: invoices.length,
+      pendingTotal: Math.round(pendingTotal * 100) / 100,
+      pendingCount: pendingInvoices.length,
+      clientCount: clientsList.length,
+      productCount: productsList.length,
+      paymentRate: Math.round(paymentRate * 10) / 10,
+      overdueCount: overdueInvoices.length,
+      overdueTotal: Math.round(overdueTotal * 100) / 100,
+      monthlyCA,
+      sentReminders: sentRemindersCount,
+      quoteCount: quotes.length,
+      quoteConversion,
+      reminderCount: reminders.length,
+    };
+  }, [documents, clientsList, productsList, reminders]);
 
   const recentDocs = useMemo(() => {
-    return documents
+    return [...documents]
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 5);
   }, [documents]);
 
-  const clients = useMemo(() => getClients(), []);
-
   function getClientName(clientId: string): string {
-    const c = clients.find((cl) => cl.id === clientId);
+    const c = clientsList.find((cl) => cl.id === clientId);
     if (!c) return "—";
     return c.company_name || `${c.first_name || ""} ${c.last_name || ""}`.trim();
   }
 
-  if (!stats || !gamification) {
+  if (loading) {
     return (
       <PageTransition>
         <Topbar title="Tableau de bord" subtitle="Chargement..." />

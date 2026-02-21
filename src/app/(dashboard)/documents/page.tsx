@@ -12,13 +12,25 @@ import {
   CheckCircle2, XCircle, MessageSquare, Clock, Printer, Download,
 } from "lucide-react";
 import {
-  getDocuments, saveDocument, deleteDocument, deleteDocumentLines,
-  getDocumentLines, saveDocumentLine, deleteDocumentLine,
-  getClients, getProducts, generateDocumentNumber,
   verifyDocument, addDocumentValidation, getDocumentValidations,
-  addAuditLog, getOrganization, getClient,
+  getDocuments as getDocumentsLS, saveDocument as saveDocumentLS,
+  deleteDocument as deleteDocumentLS, deleteDocumentLines as deleteDocumentLinesLS,
+  getDocumentLines as getDocumentLinesLS, saveDocumentLine as saveDocumentLineLS,
+  getClients as getClientsLS, getProducts as getProductsLS,
+  generateDocumentNumber as generateDocumentNumberLS,
+  getOrganization, getClient,
 } from "@/lib/local-storage";
 import type { VerificationResult, LocalValidation } from "@/lib/local-storage";
+import {
+  getDocuments as getDocumentsDB,
+  saveDocument as saveDocumentDB,
+  deleteDocument as deleteDocumentDB,
+  getDocumentLines as getDocumentLinesDB,
+  replaceDocumentLines as replaceDocumentLinesDB,
+  generateDocumentNumber as generateDocumentNumberDB,
+  getClients as getClientsDB,
+  getProducts as getProductsDB,
+} from "@/lib/supabase/data";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { calculateLineTotals as calcLine } from "@/lib/validators";
 import type { Document as Doc, DocumentLine, Client, Product } from "@/types/database";
@@ -75,11 +87,30 @@ export default function DocumentsPage() {
   const [discountPercent, setDiscountPercent] = useState(0);
   const [lines, setLines] = useState<LineForm[]>([emptyLine()]);
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setDocuments(getDocuments());
-    setClientsState(getClients());
-    setProductsState(getProducts());
+    async function loadData() {
+      try {
+        const [docsData, clientsData, productsData] = await Promise.all([
+          getDocumentsDB(),
+          getClientsDB(),
+          getProductsDB(),
+        ]);
+        setDocuments(docsData.length > 0 ? docsData : getDocumentsLS());
+        setClientsState(clientsData.length > 0 ? clientsData : getClientsLS());
+        setProductsState(productsData.length > 0 ? productsData : getProductsLS());
+      } catch {
+        setDocuments(getDocumentsLS());
+        setClientsState(getClientsLS());
+        setProductsState(getProductsLS());
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
   }, []);
 
   const filtered = useMemo(() => {
@@ -160,78 +191,150 @@ export default function DocumentsPage() {
     setView("create");
   }
 
-  function handleSaveDocument() {
+  async function handleSaveDocument() {
     if (!clientId) { alert("Sélectionnez un client"); return; }
     if (lines.every((l) => !l.description)) { alert("Ajoutez au moins une ligne"); return; }
 
-    const number = editingDocId ? documents.find((d) => d.id === editingDocId)?.number || "" : generateDocumentNumber(docType);
+    setSaving(true);
+    setError(null);
+    try {
+      let number: string;
+      if (editingDocId) {
+        number = documents.find((d) => d.id === editingDocId)?.number || "";
+      } else {
+        try {
+          number = await generateDocumentNumberDB(docType);
+        } catch {
+          number = generateDocumentNumberLS(docType);
+        }
+      }
 
-    const doc = saveDocument({
-      id: editingDocId || undefined,
-      client_id: clientId,
-      type: docType,
-      number,
-      date: docDate,
-      due_date: dueDate || null,
-      total_ht: totals.ht,
-      total_tva: totals.tva,
-      total_ttc: totals.ttc,
-      discount_percent: discountPercent,
-      discount_amount: totals.discount,
-      notes: notes || null,
-      status: "brouillon",
-    });
+      const docPayload = {
+        id: editingDocId || undefined,
+        client_id: clientId,
+        type: docType,
+        number,
+        date: docDate,
+        due_date: dueDate || null,
+        total_ht: totals.ht,
+        total_tva: totals.tva,
+        total_ttc: totals.ttc,
+        discount_percent: discountPercent,
+        discount_amount: totals.discount,
+        notes: notes || null,
+        status: "brouillon" as const,
+      };
 
-    if (editingDocId) deleteDocumentLines(editingDocId);
-    lines.forEach((line, i) => {
-      if (!line.description) return;
-      const t = calcLine(line);
-      saveDocumentLine({
-        document_id: doc.id,
-        product_id: line.product_id,
-        description: line.description,
-        quantity: line.quantity,
-        unit: line.unit,
-        unit_price: line.unit_price,
-        tva_rate: line.tva_rate,
-        discount_percent: line.discount_percent,
-        total_ht: t.total_ht,
-        total_tva: t.total_tva,
-        total_ttc: t.total_ttc,
-        position: i,
-      });
-    });
+      let savedDoc: Doc;
+      try {
+        savedDoc = await saveDocumentDB(docPayload);
+      } catch {
+        savedDoc = saveDocumentLS(docPayload);
+      }
 
-    setDocuments(getDocuments());
-    setView("list");
-  }
+      const docLines = lines
+        .filter((l) => l.description)
+        .map((line, i) => {
+          const t = calcLine(line);
+          return {
+            document_id: savedDoc.id,
+            product_id: line.product_id,
+            description: line.description,
+            quantity: line.quantity,
+            unit: line.unit,
+            unit_price: line.unit_price,
+            tva_rate: line.tva_rate,
+            discount_percent: line.discount_percent,
+            total_ht: t.total_ht,
+            total_tva: t.total_tva,
+            total_ttc: t.total_ttc,
+            position: i,
+          };
+        });
 
-  function openDetail(doc: Doc) {
-    setSelectedDoc(doc);
-    setSelectedLines(getDocumentLines(doc.id));
-    setView("detail");
-  }
+      try {
+        await replaceDocumentLinesDB(savedDoc.id, docLines);
+      } catch {
+        if (editingDocId) deleteDocumentLinesLS(editingDocId);
+        docLines.forEach((line) => saveDocumentLineLS(line));
+      }
 
-  function updateStatus(doc: Doc, status: string) {
-    saveDocument({ ...doc, status: status as Doc["status"] });
-    setDocuments(getDocuments());
-    if (selectedDoc?.id === doc.id) {
-      setSelectedDoc({ ...doc, status: status as Doc["status"] });
+      try {
+        const updated = await getDocumentsDB();
+        setDocuments(updated.length > 0 ? updated : getDocumentsLS());
+      } catch {
+        setDocuments(getDocumentsLS());
+      }
+
+      setView("list");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Erreur lors de la sauvegarde");
+    } finally {
+      setSaving(false);
     }
   }
 
-  function handleDeleteDoc(id: string) {
+  async function openDetail(doc: Doc) {
+    setSelectedDoc(doc);
+    try {
+      const linesData = await getDocumentLinesDB(doc.id);
+      setSelectedLines(linesData.length > 0 ? linesData : getDocumentLinesLS(doc.id));
+    } catch {
+      setSelectedLines(getDocumentLinesLS(doc.id));
+    }
+    setView("detail");
+  }
+
+  async function updateStatus(doc: Doc, status: string) {
+    const updated = { ...doc, status: status as Doc["status"] };
+    setDocuments((prev) => prev.map((d) => d.id === doc.id ? updated : d));
+    if (selectedDoc?.id === doc.id) setSelectedDoc(updated);
+    try {
+      await saveDocumentDB(updated);
+    } catch {
+      saveDocumentLS(updated);
+    }
+  }
+
+  async function handleDeleteDoc(id: string) {
     if (!confirm("Supprimer ce document ?")) return;
-    deleteDocumentLines(id);
-    deleteDocument(id);
-    setDocuments(getDocuments());
+    try {
+      await deleteDocumentDB(id);
+    } catch {
+      deleteDocumentLinesLS(id);
+      deleteDocumentLS(id);
+    }
+    try {
+      const updated = await getDocumentsDB();
+      setDocuments(updated.length > 0 ? updated : getDocumentsLS());
+    } catch {
+      setDocuments(getDocumentsLS());
+    }
     setView("list");
+  }
+
+  async function refreshDocuments() {
+    try {
+      const updated = await getDocumentsDB();
+      const docs = updated.length > 0 ? updated : getDocumentsLS();
+      setDocuments(docs);
+      if (selectedDoc) setSelectedDoc(docs.find((d) => d.id === selectedDoc.id) || null);
+    } catch {
+      const docs = getDocumentsLS();
+      setDocuments(docs);
+      if (selectedDoc) setSelectedDoc(docs.find((d) => d.id === selectedDoc.id) || null);
+    }
   }
 
   return (
     <PageTransition>
-      <Topbar title="Documents" subtitle={`${documents.length} document${documents.length > 1 ? "s" : ""}`} />
+      <Topbar title="Documents" subtitle={loading ? "Chargement..." : `${documents.length} document${documents.length > 1 ? "s" : ""}`} />
       <div className="p-6">
+        {error && (
+          <div className="mb-4 px-4 py-3 rounded-xl bg-red-400/10 border border-red-400/20 text-red-400 text-sm font-sans">
+            {error}
+          </div>
+        )}
         {/* ═══ LIST ═══ */}
         {view === "list" && (
           <div>
@@ -387,7 +490,7 @@ export default function DocumentsPage() {
                       </div>
                     </div>
                     <div className="mt-6 space-y-2">
-                      <PremiumButton onClick={handleSaveDocument} className="w-full" icon={<Check className="w-4 h-4" />}>
+                      <PremiumButton onClick={handleSaveDocument} loading={saving} className="w-full" icon={<Check className="w-4 h-4" />}>
                         Enregistrer
                       </PremiumButton>
                       <PremiumButton variant="ghost" onClick={() => setView("list")} className="w-full">
@@ -410,7 +513,7 @@ export default function DocumentsPage() {
             onBack={() => setView("list")}
             onUpdateStatus={(s) => { updateStatus(selectedDoc, s); }}
             onDelete={() => handleDeleteDoc(selectedDoc.id)}
-            onRefresh={() => { setDocuments(getDocuments()); setSelectedDoc(getDocuments().find(d => d.id === selectedDoc.id) || null); }}
+            onRefresh={refreshDocuments}
           />
         )}
       </div>
