@@ -415,6 +415,120 @@ export async function replaceDocumentLines(
   if (insError) throw insError;
 }
 
+// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+
+export type NotificationColor = "green" | "red" | "orange" | "blue" | "yellow" | "pink";
+
+export interface AppNotification {
+  id: string;
+  color: NotificationColor;
+  title: string;
+  message: string;
+  documentId?: string;
+  documentNumber?: string;
+}
+
+export async function computeNotifications(): Promise<AppNotification[]> {
+  const documents = await getDocuments();
+  const notifications: AppNotification[] = [];
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // 🔴 Rouge — Factures en retard
+  documents
+    .filter((d) => d.type === "facture" && d.status === "envoye" && d.due_date && new Date(d.due_date) < today)
+    .forEach((d) => {
+      const days = Math.floor((today.getTime() - new Date(d.due_date!).getTime()) / 86400000);
+      notifications.push({
+        id: `late-${d.id}`,
+        color: "red",
+        title: "Facture en retard",
+        message: `${d.number} — en retard de ${days} jour${days > 1 ? "s" : ""}`,
+        documentId: d.id,
+        documentNumber: d.number,
+      });
+    });
+
+  // 🟠 Orange — Échéance dans moins de 7 jours
+  const in7Days = new Date(today);
+  in7Days.setDate(in7Days.getDate() + 7);
+  documents
+    .filter((d) => d.type === "facture" && d.status === "envoye" && d.due_date &&
+      new Date(d.due_date) >= today && new Date(d.due_date) <= in7Days)
+    .forEach((d) => {
+      const days = Math.floor((new Date(d.due_date!).getTime() - today.getTime()) / 86400000);
+      notifications.push({
+        id: `soon-${d.id}`,
+        color: "orange",
+        title: "Échéance proche",
+        message: `${d.number} — échéance dans ${days} jour${days > 1 ? "s" : ""}`,
+        documentId: d.id,
+        documentNumber: d.number,
+      });
+    });
+
+  // 🔵 Bleu — Facture validée non envoyée depuis 3+ jours
+  const threeDaysAgo = new Date(today);
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+  documents
+    .filter((d) => d.type === "facture" && d.status === "valide" && new Date(d.date) <= threeDaysAgo)
+    .forEach((d) => {
+      const days = Math.floor((today.getTime() - new Date(d.date).getTime()) / 86400000);
+      notifications.push({
+        id: `notsent-${d.id}`,
+        color: "blue",
+        title: "Facture non envoyée",
+        message: `${d.number} — validée mais non envoyée depuis ${days} jour${days > 1 ? "s" : ""}`,
+        documentId: d.id,
+        documentNumber: d.number,
+      });
+    });
+
+  // 🟡 Jaune — Devis sans réponse depuis 30j+
+  const thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  documents
+    .filter((d) => d.type === "devis" && (d.status === "envoye" || d.status === "brouillon") && new Date(d.date) <= thirtyDaysAgo)
+    .forEach((d) => {
+      const days = Math.floor((today.getTime() - new Date(d.date).getTime()) / 86400000);
+      notifications.push({
+        id: `oldquote-${d.id}`,
+        color: "yellow",
+        title: "Devis sans réponse",
+        message: `${d.number} — sans réponse depuis ${days} jours`,
+        documentId: d.id,
+        documentNumber: d.number,
+      });
+    });
+
+  // Rose — Aucune facture ce mois-ci
+  const hasInvoiceThisMonth = documents.some((d) => {
+    const date = new Date(d.date);
+    return d.type === "facture" && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+  });
+  if (!hasInvoiceThisMonth) {
+    notifications.push({
+      id: "no-invoice-month",
+      color: "pink",
+      title: "Aucune facture ce mois-ci",
+      message: "Vous n'avez pas encore facturé ce mois-ci",
+    });
+  }
+
+  // 🟢 Vert — Tout va bien (aucune autre alerte)
+  if (notifications.length === 0) {
+    notifications.push({
+      id: "all-good",
+      color: "green",
+      title: "Tout va bien",
+      message: "Votre activité est en bonne santé",
+    });
+  }
+
+  return notifications;
+}
+
 export async function generateDocumentNumber(type: string): Promise<string> {
   const orgId = await getCurrentOrgId();
   if (!orgId) throw new Error("Utilisateur non authentifié");

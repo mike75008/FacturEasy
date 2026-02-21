@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Search, MessageSquare, LogOut, ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { computeNotifications } from "@/lib/supabase/data";
+import type { AppNotification, NotificationColor } from "@/lib/supabase/data";
 
 interface TopbarProps {
   title: string;
@@ -15,7 +17,10 @@ export function Topbar({ title, subtitle }: TopbarProps) {
   const [userName, setUserName] = useState("Utilisateur");
   const [userEmail, setUserEmail] = useState("");
   const [showMenu, setShowMenu] = useState(false);
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -29,12 +34,16 @@ export function Topbar({ title, subtitle }: TopbarProps) {
         setUserEmail(session.user.email || "");
       }
     });
+    computeNotifications().then(setNotifications).catch(() => {});
   }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setShowMenu(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifs(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -47,6 +56,22 @@ export function Topbar({ title, subtitle }: TopbarProps) {
     router.push("/login");
     router.refresh();
   }
+
+  const PRIORITY: NotificationColor[] = ["red", "orange", "yellow", "blue", "pink", "green"];
+  const topColor: NotificationColor = notifications.reduce<NotificationColor>((acc, n) => {
+    return PRIORITY.indexOf(n.color) < PRIORITY.indexOf(acc) ? n.color : acc;
+  }, "green");
+
+  const COLOR_MAP: Record<NotificationColor, { bell: string; dot: string; bg: string; text: string }> = {
+    green:  { bell: "text-emerald-400", dot: "bg-emerald-400", bg: "bg-emerald-400/10", text: "text-emerald-400" },
+    red:    { bell: "text-red-400",     dot: "bg-red-400",     bg: "bg-red-400/10",     text: "text-red-400" },
+    orange: { bell: "text-orange-400",  dot: "bg-orange-400",  bg: "bg-orange-400/10",  text: "text-orange-400" },
+    blue:   { bell: "text-blue-400",    dot: "bg-blue-400",    bg: "bg-blue-400/10",    text: "text-blue-400" },
+    yellow: { bell: "text-yellow-400",  dot: "bg-yellow-400",  bg: "bg-yellow-400/10",  text: "text-yellow-400" },
+    pink:   { bell: "text-pink-400",    dot: "bg-pink-400",    bg: "bg-pink-400/10",    text: "text-pink-400" },
+  };
+
+  const alertCount = notifications.filter((n) => n.color !== "green").length;
 
   const initials = userName
     .split(" ")
@@ -72,9 +97,46 @@ export function Topbar({ title, subtitle }: TopbarProps) {
           <MessageSquare className="w-5 h-5" />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-gold-400 rounded-full animate-pulse" />
         </button>
-        <button className="p-2.5 rounded-xl text-atlantic-200/40 hover:text-gold-400 hover:bg-gold-400/10 transition-all duration-200 relative">
-          <Bell className="w-5 h-5" />
-        </button>
+        <div className="relative" ref={notifRef}>
+          <button
+            onClick={() => setShowNotifs((v) => !v)}
+            className={`p-2.5 rounded-xl transition-all duration-200 relative hover:bg-white/5 ${COLOR_MAP[topColor].bell}`}
+          >
+            <Bell className="w-5 h-5" />
+            {alertCount > 0 && (
+              <span className={`absolute top-1 right-1 w-4 h-4 rounded-full ${COLOR_MAP[topColor].dot} flex items-center justify-center text-[9px] font-bold text-white`}>
+                {alertCount}
+              </span>
+            )}
+            {alertCount === 0 && (
+              <span className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${COLOR_MAP[topColor].dot}`} />
+            )}
+          </button>
+
+          {showNotifs && (
+            <div className="absolute right-0 top-full mt-2 w-80 rounded-xl border border-gold-400/10 bg-atlantic-900/95 backdrop-blur-xl shadow-2xl overflow-hidden z-50">
+              <div className="px-4 py-3 border-b border-gold-400/10 flex items-center justify-between">
+                <p className="text-sm font-sans font-semibold text-white">Notifications</p>
+                {alertCount > 0 && (
+                  <span className={`text-xs font-sans px-2 py-0.5 rounded-full ${COLOR_MAP[topColor].bg} ${COLOR_MAP[topColor].text}`}>
+                    {alertCount} alerte{alertCount > 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                {notifications.map((n) => (
+                  <div key={n.id} className="flex items-start gap-3 px-4 py-3 border-b border-gold-400/5 hover:bg-white/5 transition-colors">
+                    <div className={`w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0 ${COLOR_MAP[n.color].dot}`} />
+                    <div>
+                      <p className={`text-xs font-sans font-semibold ${COLOR_MAP[n.color].text}`}>{n.title}</p>
+                      <p className="text-xs font-sans text-atlantic-200/50 mt-0.5">{n.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="w-px h-8 bg-gold-400/10 mx-1" />
 
