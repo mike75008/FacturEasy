@@ -290,156 +290,12 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* ROI Widget */}
-        <GlassCard glow className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-gold-400/[0.05] to-transparent" />
-          <div className="relative flex items-center gap-6">
-            {/* Money Bag SVG */}
-            <div className="relative flex-shrink-0 animate-float">
-              <svg width="80" height="80" viewBox="0 0 80 80" className="drop-shadow-[0_0_15px_rgba(212,175,55,0.3)]">
-                <path d="M20 35C18 45 15 55 16 62C17 70 25 75 40 75C55 75 63 70 64 62C65 55 62 45 60 35C58 28 52 25 40 25C28 25 22 28 20 35Z" fill="url(#bagGradient)" stroke="#c9a84c" strokeWidth="1.5" />
-                <path d="M30 25C30 25 33 20 40 20C47 20 50 25 50 25" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" />
-                <ellipse cx="40" cy="18" rx="6" ry="4" fill="#d4af37" stroke="#c9a84c" strokeWidth="1" />
-                <path d="M36 15C38 10 42 10 44 15" fill="none" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" />
-                <text x="40" y="55" textAnchor="middle" fill="#1e3a5f" fontSize="22" fontWeight="bold" fontFamily="serif">€</text>
-                <ellipse cx="30" cy="40" rx="4" ry="8" fill="rgba(255,255,255,0.15)" transform="rotate(-15 30 40)" />
-                <defs>
-                  <linearGradient id="bagGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#e6c252" />
-                    <stop offset="50%" stopColor="#d4af37" />
-                    <stop offset="100%" stopColor="#c9a84c" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gold-400 border border-gold-300 flex items-center justify-center text-[8px] font-bold text-atlantic-900 animate-bounce">€</div>
-            </div>
-
-            <div className="flex-1">
-              <h3 className="text-lg font-display font-semibold text-white flex items-center gap-2">
-                ROI FacturePro
-                <Sparkles className="w-4 h-4 text-gold-400" />
-              </h3>
-              <p className="text-sm font-sans text-atlantic-200/50 mt-1">
-                {stats.totalCA > 0
-                  ? `${formatCurrency(stats.totalCA)} encaissés • ${stats.sentReminders} relances envoyées`
-                  : "Commencez à facturer pour voir votre ROI"}
-              </p>
-            </div>
-
-            {/* Dynamic Gauge */}
-            <div className="flex items-center gap-6">
-              <div className="text-right">
-                <div className="text-4xl font-display font-bold animated-gold-text">
-                  <AnimatedCounter target={gaugeRate} suffix="%" duration={2} />
-                </div>
-                <p className="text-xs font-sans text-atlantic-200/40">efficacité recouvrement</p>
-              </div>
-              <div className="w-24 h-24 relative">
-                <svg className="w-24 h-24 -rotate-90" viewBox="0 0 96 96">
-                  <circle cx="48" cy="48" r="40" fill="none" stroke="rgba(212,175,55,0.08)" strokeWidth="7" />
-                  <circle
-                    cx="48" cy="48" r="40" fill="none"
-                    stroke="url(#gaugeGrad)"
-                    strokeWidth="7"
-                    strokeLinecap="round"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={gaugeOffset}
-                    className="transition-all duration-[2s] ease-out"
-                  />
-                  {[0, 25, 50, 75, 100].map((tick) => {
-                    const angle = (tick / 100) * 360 - 90;
-                    const rad = (angle * Math.PI) / 180;
-                    const x1 = 48 + 34 * Math.cos(rad);
-                    const y1 = 48 + 34 * Math.sin(rad);
-                    const x2 = 48 + 37 * Math.cos(rad);
-                    const y2 = 48 + 37 * Math.sin(rad);
-                    return <line key={tick} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(212,175,55,0.3)" strokeWidth="1" />;
-                  })}
-                  <defs>
-                    <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#ef4444" />
-                      <stop offset="40%" stopColor="#f59e0b" />
-                      <stop offset="70%" stopColor="#c9a84c" />
-                      <stop offset="100%" stopColor="#22c55e" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <Star className="w-5 h-5 text-gold-400 animate-pulse" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </GlassCard>
-
-        {/* Charts + Activity */}
+        {/* Ligne 1 : VIDE 2/3 + Documents récents 1/3 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* CA Chart */}
-          <div className="lg:col-span-2">
-            <GlassCard hover={false}>
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-gold-400" />
-                  <h3 className="text-lg font-display font-semibold">Évolution du CA</h3>
-                </div>
-                <span className="text-xs font-sans text-atlantic-200/40 px-3 py-1 rounded-full bg-atlantic-800/50">12 derniers mois</span>
-              </div>
+          {/* Espace vide — stats cercles à venir */}
+          <div className="lg:col-span-2" />
 
-              {/* Graphique toujours visible — animation en cascade */}
-              <div className="relative">
-                {/* Lignes de grille */}
-                <div className="absolute inset-x-0 top-0 h-48 flex flex-col justify-between pointer-events-none">
-                  {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="border-t border-atlantic-700/20 w-full" />
-                  ))}
-                </div>
-
-                <div className="flex items-end gap-1.5 h-48 relative">
-                  {stats.monthlyCA.map((val, i) => {
-                    const heightPct = maxCA > 0 ? (val / maxCA) * 100 : 0;
-                    const isCurrentMonth = i === 11;
-                    const animatedHeight = chartAnimated
-                      ? val > 0 ? `${heightPct}%` : "3%"
-                      : "0%";
-                    return (
-                      <div key={i} className="flex-1 h-full relative group flex items-end">
-                        <div
-                          className={`w-full rounded-t-md transition-colors duration-300 ${
-                            isCurrentMonth
-                              ? "bg-gradient-to-t from-gold-400/70 to-gold-400/25 group-hover:from-gold-400/90 group-hover:to-gold-400/40"
-                              : "bg-gradient-to-t from-gold-400/40 to-gold-400/10 group-hover:from-gold-400/60 group-hover:to-gold-400/20"
-                          }`}
-                          style={{
-                            height: animatedHeight,
-                            transition: `height 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 45}ms`,
-                          }}
-                        />
-                        {val > 0 && (
-                          <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-atlantic-800 border border-gold-400/20 text-gold-400 text-xs font-sans px-2 py-1 rounded whitespace-nowrap pointer-events-none z-10">
-                            {formatCurrency(val)}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="flex gap-1.5 mt-2">
-                  {displayMonths.map((m, i) => (
-                    <div key={i} className={`flex-1 text-center text-[10px] font-sans ${i === 11 ? "text-gold-400/60 font-semibold" : "text-atlantic-200/30"}`}>{m}</div>
-                  ))}
-                </div>
-
-                {stats.monthlyCA.every((v) => v === 0) && (
-                  <p className="text-center text-xs font-sans text-atlantic-200/20 mt-3">
-                    Les données CA apparaîtront avec vos premiers paiements
-                  </p>
-                )}
-              </div>
-            </GlassCard>
-          </div>
-
-          {/* Recent Documents */}
+          {/* Documents récents — mêmes dimensions qu'avant */}
           <div>
             <GlassCard hover={false} className="h-full">
               <div className="flex items-center gap-2 mb-5">
@@ -462,10 +318,7 @@ export default function DashboardPage() {
                       refuse: "text-red-400",
                     };
                     return (
-                      <div
-                        key={doc.id}
-                        className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-atlantic-700/30 transition-colors"
-                      >
+                      <div key={doc.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-atlantic-700/30 transition-colors">
                         <FileText className={`w-4 h-4 flex-shrink-0 ${statusColors[doc.status] || "text-atlantic-200/50"}`} />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-sans text-atlantic-200/70 truncate">
@@ -479,6 +332,131 @@ export default function DashboardPage() {
                   })}
                 </div>
               )}
+            </GlassCard>
+          </div>
+        </div>
+
+        {/* Ligne 2 : CA Chart 2/3 + ROI 1/3 */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* CA Chart — 2/3 */}
+          <div className="lg:col-span-2">
+            <GlassCard hover={false}>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-gold-400" />
+                  <h3 className="text-lg font-display font-semibold">Évolution du CA</h3>
+                </div>
+                <span className="text-xs font-sans text-atlantic-200/40 px-3 py-1 rounded-full bg-atlantic-800/50">12 derniers mois</span>
+              </div>
+
+              {/* Graphique toujours visible — animation en cascade */}
+              <div className="relative">
+                <div className="absolute inset-x-0 top-0 h-48 flex flex-col justify-between pointer-events-none">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="border-t border-atlantic-700/20 w-full" />
+                  ))}
+                </div>
+                <div className="flex items-end gap-1.5 h-48 relative">
+                  {stats.monthlyCA.map((val, i) => {
+                    const heightPct = maxCA > 0 ? (val / maxCA) * 100 : 0;
+                    const isCurrentMonth = i === 11;
+                    const animatedHeight = chartAnimated ? val > 0 ? `${heightPct}%` : "3%" : "0%";
+                    return (
+                      <div key={i} className="flex-1 h-full relative group flex items-end">
+                        <div
+                          className={`w-full rounded-t-md transition-colors duration-300 ${
+                            isCurrentMonth
+                              ? "bg-gradient-to-t from-gold-400/70 to-gold-400/25 group-hover:from-gold-400/90 group-hover:to-gold-400/40"
+                              : "bg-gradient-to-t from-gold-400/40 to-gold-400/10 group-hover:from-gold-400/60 group-hover:to-gold-400/20"
+                          }`}
+                          style={{
+                            height: animatedHeight,
+                            transition: `height 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 45}ms`,
+                          }}
+                        />
+                        {val > 0 && (
+                          <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-atlantic-800 border border-gold-400/20 text-gold-400 text-xs font-sans px-2 py-1 rounded whitespace-nowrap pointer-events-none z-10">
+                            {formatCurrency(val)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-1.5 mt-2">
+                  {displayMonths.map((m, i) => (
+                    <div key={i} className={`flex-1 text-center text-[10px] font-sans ${i === 11 ? "text-gold-400/60 font-semibold" : "text-atlantic-200/30"}`}>{m}</div>
+                  ))}
+                </div>
+                {stats.monthlyCA.every((v) => v === 0) && (
+                  <p className="text-center text-xs font-sans text-atlantic-200/20 mt-3">
+                    Les données CA apparaîtront avec vos premiers paiements
+                  </p>
+                )}
+              </div>
+            </GlassCard>
+          </div>
+
+          {/* ROI — dimensions originales de Documents récents */}
+          <div>
+            <GlassCard glow className="relative overflow-hidden h-full">
+              <div className="absolute inset-0 bg-gradient-to-r from-gold-400/[0.05] to-transparent" />
+              <div className="relative">
+                {/* Titre centré */}
+                <div className="flex items-center gap-2 mb-20">
+                  <Sparkles className="w-5 h-5 text-gold-400" />
+                  <h3 className="text-lg font-display font-semibold">ROI FacturePro</h3>
+                </div>
+                {/* Contenu : sac | % | cercle */}
+                <div className="flex items-center justify-between gap-3">
+                  {/* Money Bag */}
+                  <div className="relative flex-shrink-0 animate-float">
+                    <svg width="120" height="120" viewBox="0 0 80 80" className="drop-shadow-[0_0_15px_rgba(212,175,55,0.3)]">
+                      <path d="M20 35C18 45 15 55 16 62C17 70 25 75 40 75C55 75 63 70 64 62C65 55 62 45 60 35C58 28 52 25 40 25C28 25 22 28 20 35Z" fill="url(#bagGradient)" stroke="#c9a84c" strokeWidth="1.5" />
+                      <path d="M30 25C30 25 33 20 40 20C47 20 50 25 50 25" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" />
+                      <ellipse cx="40" cy="18" rx="6" ry="4" fill="#d4af37" stroke="#c9a84c" strokeWidth="1" />
+                      <path d="M36 15C38 10 42 10 44 15" fill="none" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" />
+                      <text x="40" y="55" textAnchor="middle" fill="#1e3a5f" fontSize="22" fontWeight="bold" fontFamily="serif">€</text>
+                      <ellipse cx="30" cy="40" rx="4" ry="8" fill="rgba(255,255,255,0.15)" transform="rotate(-15 30 40)" />
+                      <defs>
+                        <linearGradient id="bagGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#e6c252" />
+                          <stop offset="50%" stopColor="#d4af37" />
+                          <stop offset="100%" stopColor="#c9a84c" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gold-400 border border-gold-300 flex items-center justify-center text-[8px] font-bold text-atlantic-900 animate-bounce">€</div>
+                  </div>
+                  {/* % */}
+                  <div className="text-center flex-1">
+                    <div className="text-5xl font-display font-bold animated-gold-text">
+                      <AnimatedCounter target={gaugeRate} suffix="%" duration={2} />
+                    </div>
+                    <p className="text-[10px] font-sans text-atlantic-200/40 mt-1">
+                      {stats.totalCA > 0 ? `${formatCurrency(stats.totalCA)} encaissés` : "aucun encaissement"}
+                    </p>
+                  </div>
+                  {/* Cercle */}
+                  <div className="w-28 h-28 relative flex-shrink-0">
+                    <svg className="w-28 h-28 -rotate-90" viewBox="0 0 96 96">
+                      <circle cx="48" cy="48" r="40" fill="none" stroke="rgba(212,175,55,0.08)" strokeWidth="7" />
+                      <circle cx="48" cy="48" r="40" fill="none" stroke="url(#gaugeGrad)" strokeWidth="7" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={gaugeOffset} className="transition-all duration-[2s] ease-out" />
+                      <defs>
+                        <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="#ef4444" />
+                          <stop offset="40%" stopColor="#f59e0b" />
+                          <stop offset="70%" stopColor="#c9a84c" />
+                          <stop offset="100%" stopColor="#22c55e" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Star className="w-4 h-4 text-gold-400 animate-pulse" />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </GlassCard>
           </div>
         </div>
