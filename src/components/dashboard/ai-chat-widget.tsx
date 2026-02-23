@@ -253,20 +253,15 @@ Réponds toujours en français.`;
         </div>
       )}
 
-      {/* Bouton flottant — même visuel que le bloc sidebar */}
+      {/* Bouton flottant — rond */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-3 px-3 py-3 rounded-xl cursor-pointer bg-gradient-to-r from-gold-400/[0.08] to-atlantic-600/20 border border-gold-400/15 hover:border-gold-400/30 backdrop-blur-xl shadow-xl transition-all duration-200"
+        className="w-12 h-12 rounded-full cursor-pointer pointer-events-auto bg-gradient-to-br from-gold-400/20 to-atlantic-600/30 border border-gold-400/20 hover:border-gold-400/40 hover:from-gold-400/30 backdrop-blur-xl shadow-xl transition-all duration-200 flex items-center justify-center"
       >
-        <div className="relative flex-shrink-0">
+        <div className="relative">
           <Brain className="w-5 h-5 text-gold-400" />
           <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
         </div>
-        <div className="text-left">
-          <p className="text-xs font-sans font-semibold text-gold-400 whitespace-nowrap">Assistant IA</p>
-          <p className="text-[10px] font-sans text-atlantic-200/40 whitespace-nowrap">En ligne</p>
-        </div>
-        <Sparkles className="w-3.5 h-3.5 text-gold-400/50" />
       </button>
     </div>
   );

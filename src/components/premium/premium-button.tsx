@@ -32,6 +32,7 @@ export const PremiumButton = forwardRef<HTMLButtonElement, PremiumButtonProps>(
           variants[variant],
           sizes[size],
           "hover:scale-[1.02] active:scale-[0.98] transition-transform duration-150",
+          !(disabled || loading) && "cursor-pointer",
           (disabled || loading) && "opacity-50 cursor-not-allowed",
           className
         )}

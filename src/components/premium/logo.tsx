@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 interface LogoProps {
   size?: "sm" | "md" | "lg";
   className?: string;
@@ -13,7 +15,7 @@ export function Logo({ size = "md", className }: LogoProps) {
   };
 
   return (
-    <div className={className}>
+    <Link href="/" className={className}>
       <h1 className={`font-display font-bold ${sizes[size]}`}>
         <span className="gold-text">Facture</span>
         <span className="text-white">Pro</span>
@@ -21,6 +23,6 @@ export function Logo({ size = "md", className }: LogoProps) {
       <p className="text-atlantic-200/60 text-sm font-sans tracking-wider uppercase">
         Facturation Intelligente
       </p>
-    </div>
+    </Link>
   );
 }
