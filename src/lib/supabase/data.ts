@@ -2,6 +2,7 @@
 // Chaque fonction utilise le client browser avec RLS automatique
 
 import { createClient } from "./client";
+import { getDocuments as getDocumentsLS } from "@/lib/local-storage";
 import type { Client, Product, Organization, NumberingSequence, Reminder, Document as DocRecord, DocumentLine } from "@/types/database";
 
 // ─── Helper : récupère l'org_id de l'utilisateur connecté ───────────────────
@@ -429,7 +430,8 @@ export interface AppNotification {
 }
 
 export async function computeNotifications(): Promise<AppNotification[]> {
-  const documents = await getDocuments();
+  let documents = await getDocuments();
+  if (documents.length === 0) documents = getDocumentsLS() as unknown as DocRecord[];
   const notifications: AppNotification[] = [];
 
   const today = new Date();

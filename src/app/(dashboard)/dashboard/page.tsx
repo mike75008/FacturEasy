@@ -353,10 +353,10 @@ export default function DashboardPage() {
             <GlassCard hover={false} className="h-full">
               {(() => {
                 const dData = [
-                  { label: "CA encaissé", value: Math.max(stats.totalCA, 0.01), display: formatCurrency(stats.totalCA), color: "#34d399" },
+                  { label: "CA encaissé", value: Math.max(stats.totalCA, 0.01), display: formatCurrency(stats.totalCA), color: "#a78bfa" },
                   { label: "En attente", value: Math.max(stats.pendingTotal, 0.01), display: formatCurrency(stats.pendingTotal), color: "#d4af37" },
                   { label: "Clients actifs", value: Math.max(stats.clientCount * 150, 0.01), display: `${stats.clientCount} clients`, color: "#93c5fd" },
-                  { label: "Taux paiement", value: Math.max(stats.paymentRate * 40, 0.01), display: `${Math.round(stats.paymentRate)}%`, color: "#a78bfa" },
+                  { label: "Taux paiement", value: Math.max(stats.paymentRate * 40, 0.01), display: `${Math.round(stats.paymentRate)}%`, color: "#34d399" },
                 ];
                 const dTotal = dData.reduce((s, d) => s + d.value, 0) || 1;
                 const R = 50; const CX = 64; const CY = 64;
@@ -376,7 +376,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex justify-center mb-5">
                       <div className="relative w-36 h-36">
-                        <svg className="w-36 h-36 -rotate-90" viewBox="0 0 128 128">
+                        <svg className="w-36 h-36" style={{transform: "rotate(45deg)"}} viewBox="0 0 128 128">
                           <circle cx={CX} cy={CY} r={R} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="14" />
                           {arcs.map((seg) => (
                             <circle key={seg.label} cx={CX} cy={CY} r={R} fill="none"
