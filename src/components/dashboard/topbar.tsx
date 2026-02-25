@@ -20,6 +20,7 @@ export function Topbar({ title, subtitle, extra }: TopbarProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [tickerIndex, setTickerIndex] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -35,13 +36,13 @@ export function Topbar({ title, subtitle, extra }: TopbarProps) {
         setUserEmail(session.user.email || "");
       }
     });
-    computeNotifications().then(setNotifications).catch(() => {});
+    computeNotifications().then(setNotifications).catch((e) => console.error("[topbar] notifs:", e));
 
     // Realtime — recharge les notifs à chaque changement sur documents
     const channel = supabase
       .channel("topbar-notifs")
       .on("postgres_changes", { event: "*", schema: "public", table: "documents" }, () => {
-        computeNotifications().then(setNotifications).catch(() => {});
+        computeNotifications().then(setNotifications).catch((e) => console.error("[topbar] notifs:", e));
       })
       .subscribe();
 
@@ -81,10 +82,32 @@ export function Topbar({ title, subtitle, extra }: TopbarProps) {
     orange: { bell: "text-orange-400",  dot: "bg-orange-400",  bg: "bg-orange-400/10",  text: "text-orange-400" },
     blue:   { bell: "text-blue-400",    dot: "bg-blue-400",    bg: "bg-blue-400/10",    text: "text-blue-400" },
     yellow: { bell: "text-yellow-400",  dot: "bg-yellow-400",  bg: "bg-yellow-400/10",  text: "text-yellow-400" },
-    pink:   { bell: "text-pink-400",    dot: "bg-pink-400",    bg: "bg-pink-400/10",    text: "text-pink-400" },
+    pink:   { bell: "text-violet-400",  dot: "bg-violet-400",  bg: "bg-violet-400/10",  text: "text-violet-400" },
   };
 
   const alertCount = notifications.filter((n) => n.color !== "green").length;
+
+  const EMOJI_MAP: Record<NotificationColor, string> = {
+    red: "🔴", orange: "🟠", yellow: "🟡", blue: "🔵", pink: "🟣", green: "✅",
+  };
+
+  const topNotif = notifications.find((n) => n.color === topColor);
+
+  const criticalNotifs = notifications
+    .filter((n) => n.color !== "green")
+    .sort((a, b) => PRIORITY.indexOf(a.color) - PRIORITY.indexOf(b.color))
+    .slice(0, 5);
+
+  const tickerList = criticalNotifs.length > 0 ? criticalNotifs : (topNotif ? [topNotif] : []);
+
+  useEffect(() => {
+    if (tickerList.length <= 1) return;
+    const interval = setInterval(() => setTickerIndex((i) => (i + 1) % tickerList.length), 3000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tickerList.length]);
+
+  const activeNotif = tickerList[tickerIndex % Math.max(tickerList.length, 1)];
 
   const initials = userName
     .split(" ")
@@ -105,6 +128,19 @@ export function Topbar({ title, subtitle, extra }: TopbarProps) {
         </div>
         {extra && <div className="ml-2">{extra}</div>}
       </div>
+
+      {activeNotif && (
+        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gold-400/20 bg-atlantic-800/30 max-w-sm overflow-hidden">
+          <span className="text-sm flex-shrink-0">{EMOJI_MAP[activeNotif.color]}</span>
+          <span className={`text-xs font-sans font-medium flex-shrink-0 ${COLOR_MAP[activeNotif.color].text}`}>{activeNotif.title}</span>
+          {activeNotif.message && (
+            <span className="text-xs font-sans text-atlantic-200/40 hidden lg:block truncate">— {activeNotif.message}</span>
+          )}
+          {tickerList.length > 1 && (
+            <span className="text-[9px] font-sans text-atlantic-200/30 flex-shrink-0">{tickerIndex % tickerList.length + 1}/{tickerList.length}</span>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <button

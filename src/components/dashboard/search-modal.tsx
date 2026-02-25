@@ -17,7 +17,7 @@ const COLOR_DOT: Record<NotificationColor, string> = {
   orange: "bg-orange-400",
   blue:   "bg-blue-400",
   yellow: "bg-yellow-400",
-  pink:   "bg-pink-400",
+  pink:   "bg-violet-400",
 };
 
 const DEFAULT = { x: 200, y: 120, w: 680, h: 480 };

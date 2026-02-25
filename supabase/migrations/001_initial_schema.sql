@@ -445,6 +445,75 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
 -- ============================================================
+-- FUNCTION: setup_new_account (appelée à l'inscription via RPC)
+-- ============================================================
+CREATE OR REPLACE FUNCTION setup_new_account(
+  p_auth_id UUID,
+  p_email TEXT,
+  p_full_name TEXT,
+  p_company_name TEXT DEFAULT 'Mon Entreprise'
+)
+RETURNS VOID AS $$
+DECLARE
+  v_org_id UUID;
+BEGIN
+  IF EXISTS (SELECT 1 FROM users WHERE auth_id = p_auth_id) THEN RETURN; END IF;
+
+  INSERT INTO organizations (name, email)
+  VALUES (COALESCE(NULLIF(p_company_name, ''), 'Mon Entreprise'), p_email)
+  RETURNING id INTO v_org_id;
+
+  INSERT INTO users (auth_id, organization_id, email, full_name, role)
+  VALUES (p_auth_id, v_org_id, p_email, COALESCE(NULLIF(p_full_name, ''), p_email), 'owner');
+
+  INSERT INTO numbering_sequences (organization_id, document_type, prefix, fiscal_year)
+  VALUES
+    (v_org_id, 'facture', 'FAC', EXTRACT(YEAR FROM NOW())::INTEGER),
+    (v_org_id, 'devis', 'DEV', EXTRACT(YEAR FROM NOW())::INTEGER),
+    (v_org_id, 'avoir', 'AVO', EXTRACT(YEAR FROM NOW())::INTEGER),
+    (v_org_id, 'bon_livraison', 'BL', EXTRACT(YEAR FROM NOW())::INTEGER);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================
+-- FUNCTION: setup_account_if_missing (appelée au chargement dashboard)
+-- ============================================================
+CREATE OR REPLACE FUNCTION setup_account_if_missing()
+RETURNS VOID AS $$
+DECLARE
+  v_user_record RECORD;
+  v_org_id UUID;
+BEGIN
+  SELECT id, email, raw_user_meta_data INTO v_user_record
+  FROM auth.users WHERE id = auth.uid();
+
+  IF v_user_record IS NULL THEN RETURN; END IF;
+  IF EXISTS (SELECT 1 FROM users WHERE auth_id = auth.uid()) THEN RETURN; END IF;
+
+  INSERT INTO organizations (name, email)
+  VALUES (
+    COALESCE(NULLIF(v_user_record.raw_user_meta_data->>'company_name', ''), 'Mon Entreprise'),
+    v_user_record.email
+  )
+  RETURNING id INTO v_org_id;
+
+  INSERT INTO users (auth_id, organization_id, email, full_name, role)
+  VALUES (
+    auth.uid(), v_org_id, v_user_record.email,
+    COALESCE(NULLIF(v_user_record.raw_user_meta_data->>'full_name', ''), v_user_record.email),
+    'owner'
+  );
+
+  INSERT INTO numbering_sequences (organization_id, document_type, prefix, fiscal_year)
+  VALUES
+    (v_org_id, 'facture', 'FAC', EXTRACT(YEAR FROM NOW())::INTEGER),
+    (v_org_id, 'devis', 'DEV', EXTRACT(YEAR FROM NOW())::INTEGER),
+    (v_org_id, 'avoir', 'AVO', EXTRACT(YEAR FROM NOW())::INTEGER),
+    (v_org_id, 'bon_livraison', 'BL', EXTRACT(YEAR FROM NOW())::INTEGER);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================
 -- INDEXES for performance
 -- ============================================================
 CREATE INDEX idx_users_auth_id ON users(auth_id);

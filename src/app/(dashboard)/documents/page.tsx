@@ -19,8 +19,8 @@ import {
   getClients as getClientsLS, getProducts as getProductsLS,
   generateDocumentNumber as generateDocumentNumberLS,
   getOrganization, getClient,
-} from "@/lib/local-storage";
-import type { VerificationResult, LocalValidation } from "@/lib/local-storage";
+} from "@/lib/supabase/data";
+import type { VerificationResult, LocalValidation } from "@/lib/supabase/data";
 import {
   getDocuments as getDocumentsDB,
   saveDocument as saveDocumentDB,
@@ -102,13 +102,13 @@ export default function DocumentsPage() {
           getClientsDB(),
           getProductsDB(),
         ]);
-        setDocuments(docsData.length > 0 ? docsData : getDocumentsLS());
-        setClientsState(clientsData.length > 0 ? clientsData : getClientsLS());
-        setProductsState(productsData.length > 0 ? productsData : getProductsLS());
+        setDocuments(docsData);
+        setClientsState(clientsData);
+        setProductsState(productsData);
       } catch {
-        setDocuments(getDocumentsLS());
-        setClientsState(getClientsLS());
-        setProductsState(getProductsLS());
+        setDocuments([]);
+        setClientsState([]);
+        setProductsState([]);
       } finally {
         setLoading(false);
       }
@@ -264,9 +264,9 @@ export default function DocumentsPage() {
 
       try {
         const updated = await getDocumentsDB();
-        setDocuments(updated.length > 0 ? updated : getDocumentsLS());
+        setDocuments(updated);
       } catch {
-        setDocuments(getDocumentsLS());
+        setDocuments([]);
       }
 
       setView("list");
@@ -309,23 +309,20 @@ export default function DocumentsPage() {
     }
     try {
       const updated = await getDocumentsDB();
-      setDocuments(updated.length > 0 ? updated : getDocumentsLS());
+      setDocuments(updated);
     } catch {
-      setDocuments(getDocumentsLS());
+      setDocuments([]);
     }
     setView("list");
   }
 
   async function refreshDocuments() {
     try {
-      const updated = await getDocumentsDB();
-      const docs = updated.length > 0 ? updated : getDocumentsLS();
+      const docs = await getDocumentsDB();
       setDocuments(docs);
       if (selectedDoc) setSelectedDoc(docs.find((d) => d.id === selectedDoc.id) || null);
     } catch {
-      const docs = getDocumentsLS();
-      setDocuments(docs);
-      if (selectedDoc) setSelectedDoc(docs.find((d) => d.id === selectedDoc.id) || null);
+      setDocuments([]);
     }
   }
 

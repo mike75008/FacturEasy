@@ -5,6 +5,63 @@ import { createClient } from "./client";
 import { getDocuments as getDocumentsLS } from "@/lib/local-storage";
 import type { Client, Product, Organization, NumberingSequence, Reminder, Document as DocRecord, DocumentLine } from "@/types/database";
 
+// ─── Helper : s'assurer que le compte est initialisé avant les opérations RLS ─
+// Appelé avant toute insertion dans document_lines pour éviter les erreurs RLS
+// dues à une ligne manquante dans public.users.
+async function ensureAccountReady(): Promise<void> {
+  try {
+    // Import dynamique pour éviter la dépendance circulaire au module client
+    const { accountSetupReady } = await import("@/components/dashboard/account-setup");
+    await accountSetupReady;
+  } catch {
+    // Si l'import échoue (ex: SSR), on continue sans bloquer
+  }
+}
+
+// ─── Helper : détecter une erreur RLS ─────────────────────────────────────────
+function isRLSError(error: { code?: string; message?: string }): boolean {
+  return (
+    error.code === "42501" ||
+    (error.message?.includes("row-level security") ?? false) ||
+    (error.message?.includes("violates row-level security policy") ?? false)
+  );
+}
+
+// ─── Helper : forcer le setup si RLS échoue ───────────────────────────────────
+async function runSetupAndRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err: unknown) {
+    const error = err as { code?: string; message?: string };
+    if (!isRLSError(error)) throw err;
+
+    // Erreur RLS détectée — la ligne public.users n'existe probablement pas encore
+    console.warn("[data.ts] Erreur RLS détectée, tentative de setup_new_account...");
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+      const { error: setupErr } = await supabase.rpc("setup_new_account", {
+        p_auth_id: user.id,
+        p_email: user.email ?? "",
+        p_full_name: user.user_metadata?.full_name ?? user.email ?? "",
+        p_company_name: user.user_metadata?.company_name ?? "Mon Entreprise",
+      });
+
+      if (setupErr) {
+        console.error("[data.ts] setup_new_account échoué:", setupErr.message, setupErr);
+      } else {
+        console.log("[data.ts] setup_new_account réussi, retry de l'opération...");
+        // Retry l'opération originale
+        return await fn();
+      }
+    }
+
+    // On relance l'erreur originale si le setup a échoué
+    throw err;
+  }
+}
+
 // ─── Helper : récupère l'org_id de l'utilisateur connecté ───────────────────
 
 async function getCurrentOrgId(): Promise<string | null> {
@@ -30,7 +87,7 @@ export async function getClients(): Promise<Client[]> {
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return data ?? [];
 }
 
@@ -61,7 +118,7 @@ export async function saveClient(client: Partial<Client>): Promise<Client> {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) throw new Error(error.message);
     return data;
   } else {
     // Création — on récupère l'org_id
@@ -89,7 +146,7 @@ export async function saveClient(client: Partial<Client>): Promise<Client> {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) throw new Error(error.message);
     return data;
   }
 }
@@ -97,7 +154,7 @@ export async function saveClient(client: Partial<Client>): Promise<Client> {
 export async function deleteClient(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("clients").delete().eq("id", id);
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 }
 
 // ─── PRODUCTS ───────────────────────────────────────────────────────────────
@@ -109,7 +166,7 @@ export async function getProducts(): Promise<Product[]> {
     .select("*")
     .order("name", { ascending: true });
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return data ?? [];
 }
 
@@ -134,7 +191,7 @@ export async function saveProduct(product: Partial<Product>): Promise<Product> {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) throw new Error(error.message);
     return data;
   } else {
     // Création
@@ -156,7 +213,7 @@ export async function saveProduct(product: Partial<Product>): Promise<Product> {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) throw new Error(error.message);
     return data;
   }
 }
@@ -164,7 +221,7 @@ export async function saveProduct(product: Partial<Product>): Promise<Product> {
 export async function deleteProduct(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("products").delete().eq("id", id);
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 }
 
 // ─── ORGANISATION ────────────────────────────────────────────────────────────
@@ -180,7 +237,7 @@ export async function getOrganization(): Promise<Organization | null> {
     .eq("id", orgId)
     .single();
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return data;
 }
 
@@ -216,7 +273,7 @@ export async function saveOrganization(org: Partial<Organization>): Promise<Orga
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return data;
 }
 
@@ -229,7 +286,7 @@ export async function getSequences(): Promise<NumberingSequence[]> {
     .select("*")
     .order("document_type", { ascending: true });
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return data ?? [];
 }
 
@@ -244,7 +301,7 @@ export async function updateSequencePrefix(documentType: string, prefix: string)
     .eq("organization_id", orgId)
     .eq("document_type", documentType);
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 }
 
 // ─── RELANCES ────────────────────────────────────────────────────────────────
@@ -256,7 +313,7 @@ export async function getReminders(): Promise<Reminder[]> {
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return data ?? [];
 }
 
@@ -280,7 +337,7 @@ export async function saveReminder(reminder: Partial<Reminder>): Promise<Reminde
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return data;
 }
 
@@ -291,7 +348,7 @@ export async function markReminderSent(id: string): Promise<void> {
     .update({ sent_at: new Date().toISOString() })
     .eq("id", id);
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 }
 
 // ─── DOCUMENTS ────────────────────────────────────────────────────────────────
@@ -303,70 +360,80 @@ export async function getDocuments(): Promise<DocRecord[]> {
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return data ?? [];
 }
 
 export async function saveDocument(doc: Partial<DocRecord>): Promise<DocRecord> {
-  const supabase = createClient();
+  return runSetupAndRetry(async () => {
+    const supabase = createClient();
 
-  if (doc.id) {
-    const { data, error } = await supabase
-      .from("documents")
-      .update({
-        client_id: doc.client_id,
-        type: doc.type,
-        status: doc.status,
-        number: doc.number,
-        date: doc.date,
-        due_date: doc.due_date ?? null,
-        total_ht: doc.total_ht ?? 0,
-        total_tva: doc.total_tva ?? 0,
-        total_ttc: doc.total_ttc ?? 0,
-        discount_percent: doc.discount_percent ?? 0,
-        discount_amount: doc.discount_amount ?? 0,
-        notes: doc.notes ?? null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", doc.id)
-      .select()
-      .single();
+    if (doc.id) {
+      const { data, error } = await supabase
+        .from("documents")
+        .update({
+          client_id: doc.client_id,
+          type: doc.type,
+          status: doc.status,
+          number: doc.number,
+          date: doc.date,
+          due_date: doc.due_date ?? null,
+          total_ht: doc.total_ht ?? 0,
+          total_tva: doc.total_tva ?? 0,
+          total_ttc: doc.total_ttc ?? 0,
+          discount_percent: doc.discount_percent ?? 0,
+          discount_amount: doc.discount_amount ?? 0,
+          notes: doc.notes ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", doc.id)
+        .select()
+        .single();
 
-    if (error) throw error;
-    return data;
-  } else {
-    const orgId = await getCurrentOrgId();
-    if (!orgId) throw new Error("Utilisateur non authentifié");
+      if (error) throw new Error(error.message);
+      return data;
+    } else {
+      const orgId = await getCurrentOrgId();
+      if (!orgId) throw new Error("Utilisateur non authentifié");
 
-    const { data, error } = await supabase
-      .from("documents")
-      .insert({
-        organization_id: orgId,
-        client_id: doc.client_id ?? "",
-        type: doc.type ?? "facture",
-        status: doc.status ?? "brouillon",
-        number: doc.number ?? "",
-        date: doc.date ?? new Date().toISOString().split("T")[0],
-        due_date: doc.due_date ?? null,
-        total_ht: doc.total_ht ?? 0,
-        total_tva: doc.total_tva ?? 0,
-        total_ttc: doc.total_ttc ?? 0,
-        discount_percent: doc.discount_percent ?? 0,
-        discount_amount: doc.discount_amount ?? 0,
-        notes: doc.notes ?? null,
-      })
-      .select()
-      .single();
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: userRow } = await supabase
+        .from("users")
+        .select("id")
+        .eq("auth_id", user?.id ?? "")
+        .single();
 
-    if (error) throw error;
-    return data;
-  }
+      const { data, error } = await supabase
+        .from("documents")
+        .insert({
+          organization_id: orgId,
+          created_by: userRow?.id ?? null,
+          client_id: doc.client_id ?? "",
+          type: doc.type ?? "facture",
+          status: doc.status ?? "brouillon",
+          number: doc.number ?? "",
+          date: doc.date ?? new Date().toISOString().split("T")[0],
+          due_date: doc.due_date ?? null,
+          total_ht: doc.total_ht ?? 0,
+          total_tva: doc.total_tva ?? 0,
+          total_ttc: doc.total_ttc ?? 0,
+          discount_percent: doc.discount_percent ?? 0,
+          discount_amount: doc.discount_amount ?? 0,
+          notes: doc.notes ?? null,
+        })
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      return data;
+    }
+  });
 }
 
 export async function deleteDocument(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("documents").delete().eq("id", id);
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 }
 
 export async function getDocumentLines(documentId: string): Promise<DocumentLine[]> {
@@ -377,7 +444,7 @@ export async function getDocumentLines(documentId: string): Promise<DocumentLine
     .eq("document_id", documentId)
     .order("position", { ascending: true });
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return data ?? [];
 }
 
@@ -385,35 +452,40 @@ export async function replaceDocumentLines(
   documentId: string,
   lines: Partial<DocumentLine>[]
 ): Promise<void> {
-  const supabase = createClient();
+  // Attendre que le compte soit initialisé (public.users existe) avant d'écrire
+  await ensureAccountReady();
 
-  const { error: delError } = await supabase
-    .from("document_lines")
-    .delete()
-    .eq("document_id", documentId);
-  if (delError) throw delError;
+  await runSetupAndRetry(async () => {
+    const supabase = createClient();
 
-  if (lines.length === 0) return;
+    const { error: delError } = await supabase
+      .from("document_lines")
+      .delete()
+      .eq("document_id", documentId);
+    if (delError) throw delError;
 
-  const { error: insError } = await supabase
-    .from("document_lines")
-    .insert(
-      lines.map((l, i) => ({
-        document_id: documentId,
-        product_id: l.product_id ?? null,
-        description: l.description ?? "",
-        quantity: l.quantity ?? 1,
-        unit: l.unit ?? "unité",
-        unit_price: l.unit_price ?? 0,
-        tva_rate: l.tva_rate ?? 20,
-        discount_percent: l.discount_percent ?? 0,
-        total_ht: l.total_ht ?? 0,
-        total_tva: l.total_tva ?? 0,
-        total_ttc: l.total_ttc ?? 0,
-        position: l.position ?? i,
-      }))
-    );
-  if (insError) throw insError;
+    if (lines.length === 0) return;
+
+    const { error: insError } = await supabase
+      .from("document_lines")
+      .insert(
+        lines.map((l, i) => ({
+          document_id: documentId,
+          product_id: l.product_id ?? null,
+          description: l.description ?? "",
+          quantity: l.quantity ?? 1,
+          unit: l.unit ?? "unité",
+          unit_price: l.unit_price ?? 0,
+          tva_rate: l.tva_rate ?? 20,
+          discount_percent: l.discount_percent ?? 0,
+          total_ht: l.total_ht ?? 0,
+          total_tva: l.total_tva ?? 0,
+          total_ttc: l.total_ttc ?? 0,
+          position: l.position ?? i,
+        }))
+      );
+    if (insError) throw insError;
+  });
 }
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
@@ -530,6 +602,89 @@ export async function computeNotifications(): Promise<AppNotification[]> {
 
   return notifications;
 }
+
+// ─── TYPES DE VALIDATION ─────────────────────────────────────────────────────
+
+export interface VerificationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface LocalValidation {
+  id: string;
+  documentId: string;
+  checkedAt: string;
+  result: VerificationResult;
+}
+
+export function verifyDocument(doc: Partial<DocRecord>): VerificationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  if (!doc.client_id) errors.push("Client manquant");
+  if (!doc.date) errors.push("Date manquante");
+  if (!doc.number) errors.push("Numéro manquant");
+  if ((doc.total_ttc ?? 0) <= 0) warnings.push("Montant total à zéro");
+  if (doc.type === "facture" && !doc.due_date) warnings.push("Date d'échéance non définie");
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+const _validations: LocalValidation[] = [];
+
+export function addDocumentValidation(documentId: string, result: VerificationResult): LocalValidation {
+  const v: LocalValidation = { id: `val-${Date.now()}`, documentId, checkedAt: new Date().toISOString(), result };
+  _validations.push(v);
+  return v;
+}
+
+export function getDocumentValidations(documentId: string): LocalValidation[] {
+  return _validations.filter((v) => v.documentId === documentId);
+}
+
+export async function getClient(id: string): Promise<Client | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase.from("clients").select("*").eq("id", id).single();
+  if (error) return null;
+  return data;
+}
+
+export async function deleteDocumentLines(documentId: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("document_lines").delete().eq("document_id", documentId);
+  if (error) throw new Error(error.message);
+}
+
+export async function saveDocumentLine(line: Partial<DocumentLine> & { document_id: string }): Promise<DocumentLine> {
+  // Attendre que le compte soit initialisé (public.users existe) avant d'écrire
+  await ensureAccountReady();
+
+  return runSetupAndRetry(async () => {
+    const supabase = createClient();
+    if (line.id) {
+      const { data, error } = await supabase.from("document_lines").update({
+        product_id: line.product_id ?? null, description: line.description ?? "",
+        quantity: line.quantity ?? 1, unit: line.unit ?? "unité", unit_price: line.unit_price ?? 0,
+        tva_rate: line.tva_rate ?? 20, discount_percent: line.discount_percent ?? 0,
+        total_ht: line.total_ht ?? 0, total_tva: line.total_tva ?? 0, total_ttc: line.total_ttc ?? 0,
+        position: line.position ?? 0,
+      }).eq("id", line.id).select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    } else {
+      const { data, error } = await supabase.from("document_lines").insert({
+        document_id: line.document_id, product_id: line.product_id ?? null,
+        description: line.description ?? "", quantity: line.quantity ?? 1,
+        unit: line.unit ?? "unité", unit_price: line.unit_price ?? 0, tva_rate: line.tva_rate ?? 20,
+        discount_percent: line.discount_percent ?? 0, total_ht: line.total_ht ?? 0,
+        total_tva: line.total_tva ?? 0, total_ttc: line.total_ttc ?? 0, position: line.position ?? 0,
+      }).select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    }
+  });
+}
+
+// ─── NUMÉROTATION ─────────────────────────────────────────────────────────────
 
 export async function generateDocumentNumber(type: string): Promise<string> {
   const orgId = await getCurrentOrgId();

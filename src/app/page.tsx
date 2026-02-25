@@ -190,11 +190,11 @@ export default function HomePage() {
           </div>
 
           <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-bold leading-[1.1] mb-6">
-            La facturation
+            Simplifiez-vous la vie
             <br />
-            <span className="animated-gold-text">haut de gamme</span>
+            <span className="animated-gold-text">avec FacturEasy</span>
             <br />
-            pour les professionnels
+        l'outil de facturation pour tous 
           </h1>
 
           <p className="text-xl md:text-2xl text-atlantic-200/70 font-body max-w-3xl mx-auto mb-10">
