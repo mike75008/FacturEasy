@@ -205,11 +205,7 @@ export default function DocumentsPage() {
       if (editingDocId) {
         number = documents.find((d) => d.id === editingDocId)?.number || "";
       } else {
-        try {
-          number = await generateDocumentNumberDB(docType);
-        } catch {
-          number = generateDocumentNumberLS(docType);
-        }
+        number = await generateDocumentNumberDB(docType);
       }
 
       const docPayload = {
@@ -228,12 +224,7 @@ export default function DocumentsPage() {
         status: "brouillon" as const,
       };
 
-      let savedDoc: Doc;
-      try {
-        savedDoc = await saveDocumentDB(docPayload);
-      } catch {
-        savedDoc = saveDocumentLS(docPayload);
-      }
+      const savedDoc: Doc = await saveDocumentDB(docPayload);
 
       const docLines = lines
         .filter((l) => l.description)
@@ -255,12 +246,7 @@ export default function DocumentsPage() {
           };
         });
 
-      try {
-        await replaceDocumentLinesDB(savedDoc.id, docLines);
-      } catch {
-        if (editingDocId) deleteDocumentLinesLS(editingDocId);
-        docLines.forEach((line) => saveDocumentLineLS(line));
-      }
+      await replaceDocumentLinesDB(savedDoc.id, docLines);
 
       try {
         const updated = await getDocumentsDB();
@@ -650,7 +636,7 @@ function DocumentDetail({ doc, lines, clients, getClientName, onBack, onUpdateSt
   }, []);
 
   useEffect(() => {
-    setVerification(verifyDocument(doc.id));
+    setVerification(verifyDocument(doc));
     setValidations(getDocumentValidations(doc.id));
   }, [doc.id, doc.status]);
 
@@ -666,14 +652,11 @@ function DocumentDetail({ doc, lines, clients, getClientName, onBack, onUpdateSt
   }
 
   function handleValidate(action: "approve" | "reject" | "request_changes") {
-    addDocumentValidation({
-      document_id: doc.id,
-      action,
-      comment: validationComment || undefined,
-    });
+    addDocumentValidation(doc.id, { passed: action === "approve", checks: [] });
     setValidationComment("");
     setShowValidation(false);
     setValidations(getDocumentValidations(doc.id));
+    if (action === "approve") onUpdateStatus("valide");
     onRefresh();
   }
 

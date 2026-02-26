@@ -424,7 +424,11 @@ export async function saveDocument(doc: Partial<DocRecord>): Promise<DocRecord> 
         .select()
         .single();
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error("[saveDocument] ERREUR:", error.message);
+        throw new Error(error.message);
+      }
+      console.log("[saveDocument] SUCCÈS:", data?.id);
       return data;
     }
   });
@@ -605,10 +609,15 @@ export async function computeNotifications(): Promise<AppNotification[]> {
 
 // ─── TYPES DE VALIDATION ─────────────────────────────────────────────────────
 
+export interface VerificationCheck {
+  ok: boolean;
+  label: string;
+  detail?: string;
+}
+
 export interface VerificationResult {
-  valid: boolean;
-  errors: string[];
-  warnings: string[];
+  passed: boolean;
+  checks: VerificationCheck[];
 }
 
 export interface LocalValidation {
@@ -619,14 +628,14 @@ export interface LocalValidation {
 }
 
 export function verifyDocument(doc: Partial<DocRecord>): VerificationResult {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  if (!doc.client_id) errors.push("Client manquant");
-  if (!doc.date) errors.push("Date manquante");
-  if (!doc.number) errors.push("Numéro manquant");
-  if ((doc.total_ttc ?? 0) <= 0) warnings.push("Montant total à zéro");
-  if (doc.type === "facture" && !doc.due_date) warnings.push("Date d'échéance non définie");
-  return { valid: errors.length === 0, errors, warnings };
+  const checks: VerificationCheck[] = [
+    { ok: !!doc.client_id, label: "Client renseigné", detail: doc.client_id ? undefined : "Aucun client sélectionné" },
+    { ok: !!doc.date, label: "Date renseignée", detail: doc.date ? undefined : "Date manquante" },
+    { ok: !!doc.number, label: "Numéro de document", detail: doc.number ? undefined : "Numéro manquant" },
+    { ok: (doc.total_ttc ?? 0) > 0, label: "Montant non nul", detail: (doc.total_ttc ?? 0) > 0 ? undefined : "Montant total à zéro" },
+    { ok: doc.type !== "facture" || !!doc.due_date, label: "Date d'échéance", detail: doc.type === "facture" && !doc.due_date ? "Non définie" : undefined },
+  ];
+  return { passed: checks.every((c) => c.ok), checks };
 }
 
 const _validations: LocalValidation[] = [];
@@ -691,25 +700,49 @@ export async function generateDocumentNumber(type: string): Promise<string> {
   if (!orgId) throw new Error("Utilisateur non authentifié");
 
   const supabase = createClient();
-  const { data: seq, error } = await supabase
+  const year = new Date().getFullYear();
+
+  const { data: seq, error: seqError } = await supabase
     .from("numbering_sequences")
     .select("*")
     .eq("organization_id", orgId)
     .eq("document_type", type)
-    .single();
+    .eq("fiscal_year", year)
+    .maybeSingle();
 
-  if (error || !seq) {
-    const year = new Date().getFullYear();
-    const prefix = type.slice(0, 3).toUpperCase();
+  if (seqError) throw new Error(seqError.message);
+
+  const prefix =
+    type === "facture" ? "FAC" :
+    type === "devis"   ? "DEV" :
+    type === "avoir"   ? "AVO" :
+    type === "bon_livraison" ? "BL" :
+    type.slice(0, 3).toUpperCase();
+
+  if (!seq) {
+    // Aucune séquence → on l'insère avec current_number = 1
+    const { error: insertError } = await supabase
+      .from("numbering_sequences")
+      .insert({
+        organization_id: orgId,
+        document_type: type,
+        prefix,
+        current_number: 1,
+        fiscal_year: year,
+      });
+
+    if (insertError) throw new Error(insertError.message);
     return `${prefix}-${year}-00001`;
   }
 
   const nextNum = seq.current_number + 1;
 
-  await supabase
+  const { error: updateError } = await supabase
     .from("numbering_sequences")
-    .update({ current_number: nextNum, updated_at: new Date().toISOString() })
+    .update({ current_number: nextNum })
     .eq("id", seq.id);
 
-  return `${seq.prefix}-${seq.fiscal_year}-${String(nextNum).padStart(5, "0")}`;
+  if (updateError) throw new Error(updateError.message);
+
+  return `${prefix}-${year}-${String(nextNum).padStart(5, "0")}`;
 }
