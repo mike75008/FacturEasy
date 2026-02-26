@@ -78,6 +78,50 @@ async function getCurrentOrgId(): Promise<string | null> {
   return data?.organization_id ?? null;
 }
 
+// ─── Helper : récupère userId + orgId depuis public.users ────────────────────
+
+async function getCurrentUserRow(): Promise<{ userId: string; orgId: string } | null> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("users")
+    .select("id, organization_id")
+    .eq("auth_id", user.id)
+    .single();
+
+  return data ? { userId: data.id, orgId: data.organization_id } : null;
+}
+
+// ─── Helper : enregistre une entrée dans audit_logs (fire-and-forget) ────────
+
+async function logAudit(
+  action: "create" | "update" | "delete",
+  entityType: string,
+  entityId: string,
+  newValues?: Record<string, unknown>,
+  oldValues?: Record<string, unknown>
+): Promise<void> {
+  try {
+    const userRow = await getCurrentUserRow();
+    if (!userRow) return;
+
+    const supabase = createClient();
+    await supabase.from("audit_logs").insert({
+      organization_id: userRow.orgId,
+      user_id: userRow.userId,
+      action,
+      entity_type: entityType,
+      entity_id: entityId,
+      old_values: oldValues ?? null,
+      new_values: newValues ?? null,
+    });
+  } catch {
+    // Ne jamais bloquer l'opération principale
+  }
+}
+
 // ─── CLIENTS ────────────────────────────────────────────────────────────────
 
 export async function getClients(): Promise<Client[]> {
@@ -119,6 +163,7 @@ export async function saveClient(client: Partial<Client>): Promise<Client> {
       .single();
 
     if (error) throw new Error(error.message);
+    logAudit("update", "client", client.id, data as Record<string, unknown>).catch(() => {});
     return data;
   } else {
     // Création — on récupère l'org_id
@@ -147,6 +192,7 @@ export async function saveClient(client: Partial<Client>): Promise<Client> {
       .single();
 
     if (error) throw new Error(error.message);
+    logAudit("create", "client", data.id, data as Record<string, unknown>).catch(() => {});
     return data;
   }
 }
@@ -155,6 +201,7 @@ export async function deleteClient(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("clients").delete().eq("id", id);
   if (error) throw new Error(error.message);
+  logAudit("delete", "client", id).catch(() => {});
 }
 
 // ─── PRODUCTS ───────────────────────────────────────────────────────────────
@@ -192,6 +239,7 @@ export async function saveProduct(product: Partial<Product>): Promise<Product> {
       .single();
 
     if (error) throw new Error(error.message);
+    logAudit("update", "product", product.id, data as Record<string, unknown>).catch(() => {});
     return data;
   } else {
     // Création
@@ -214,6 +262,7 @@ export async function saveProduct(product: Partial<Product>): Promise<Product> {
       .single();
 
     if (error) throw new Error(error.message);
+    logAudit("create", "product", data.id, data as Record<string, unknown>).catch(() => {});
     return data;
   }
 }
@@ -222,6 +271,7 @@ export async function deleteProduct(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("products").delete().eq("id", id);
   if (error) throw new Error(error.message);
+  logAudit("delete", "product", id).catch(() => {});
 }
 
 // ─── ORGANISATION ────────────────────────────────────────────────────────────
@@ -391,6 +441,7 @@ export async function saveDocument(doc: Partial<DocRecord>): Promise<DocRecord> 
         .single();
 
       if (error) throw new Error(error.message);
+      logAudit("update", "document", doc.id, data as Record<string, unknown>).catch(() => {});
       return data;
     } else {
       const orgId = await getCurrentOrgId();
@@ -429,6 +480,7 @@ export async function saveDocument(doc: Partial<DocRecord>): Promise<DocRecord> 
         throw new Error(error.message);
       }
       console.log("[saveDocument] SUCCÈS:", data?.id);
+      logAudit("create", "document", data.id, data as Record<string, unknown>).catch(() => {});
       return data;
     }
   });
@@ -438,6 +490,7 @@ export async function deleteDocument(id: string): Promise<void> {
   const supabase = createClient();
   const { error } = await supabase.from("documents").delete().eq("id", id);
   if (error) throw new Error(error.message);
+  logAudit("delete", "document", id).catch(() => {});
 }
 
 export async function getDocumentLines(documentId: string): Promise<DocumentLine[]> {
