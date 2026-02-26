@@ -558,6 +558,14 @@ export interface AppNotification {
   documentNumber?: string;
 }
 
+// Parse une date YYYY-MM-DD en heure locale (évite le décalage UTC)
+function parseLocalDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const d = new Date(year, month - 1, day);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 export async function computeNotifications(): Promise<AppNotification[]> {
   let documents = await getDocuments();
   if (documents.length === 0) documents = getDocumentsLS() as unknown as DocRecord[];
@@ -568,9 +576,9 @@ export async function computeNotifications(): Promise<AppNotification[]> {
 
   // 🔴 Rouge — Factures en retard
   documents
-    .filter((d) => d.type === "facture" && d.status === "envoye" && d.due_date && new Date(d.due_date) < today)
+    .filter((d) => d.type === "facture" && d.status === "envoye" && d.due_date && parseLocalDate(d.due_date) < today)
     .forEach((d) => {
-      const days = Math.floor((today.getTime() - new Date(d.due_date!).getTime()) / 86400000);
+      const days = Math.floor((today.getTime() - parseLocalDate(d.due_date!).getTime()) / 86400000);
       notifications.push({
         id: `late-${d.id}`,
         color: "red",
@@ -586,9 +594,9 @@ export async function computeNotifications(): Promise<AppNotification[]> {
   in7Days.setDate(in7Days.getDate() + 7);
   documents
     .filter((d) => d.type === "facture" && d.status === "envoye" && d.due_date &&
-      new Date(d.due_date) >= today && new Date(d.due_date) <= in7Days)
+      parseLocalDate(d.due_date) >= today && parseLocalDate(d.due_date) <= in7Days)
     .forEach((d) => {
-      const days = Math.floor((new Date(d.due_date!).getTime() - today.getTime()) / 86400000);
+      const days = Math.floor((parseLocalDate(d.due_date!).getTime() - today.getTime()) / 86400000);
       notifications.push({
         id: `soon-${d.id}`,
         color: "orange",
@@ -603,9 +611,9 @@ export async function computeNotifications(): Promise<AppNotification[]> {
   const threeDaysAgo = new Date(today);
   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
   documents
-    .filter((d) => d.type === "facture" && d.status === "valide" && new Date(d.date) <= threeDaysAgo)
+    .filter((d) => d.type === "facture" && d.status === "valide" && parseLocalDate(d.date) <= threeDaysAgo)
     .forEach((d) => {
-      const days = Math.floor((today.getTime() - new Date(d.date).getTime()) / 86400000);
+      const days = Math.floor((today.getTime() - parseLocalDate(d.date).getTime()) / 86400000);
       notifications.push({
         id: `notsent-${d.id}`,
         color: "blue",
@@ -616,26 +624,26 @@ export async function computeNotifications(): Promise<AppNotification[]> {
       });
     });
 
-  // 🟡 Jaune — Devis sans réponse depuis 30j+
+  // 🟡 Jaune — Facture sans réponse depuis 30j+
   const thirtyDaysAgo = new Date(today);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   documents
-    .filter((d) => d.type === "devis" && (d.status === "envoye" || d.status === "brouillon") && new Date(d.date) <= thirtyDaysAgo)
+    .filter((d) => d.type === "facture" && d.status === "envoye" && parseLocalDate(d.date) <= thirtyDaysAgo)
     .forEach((d) => {
-      const days = Math.floor((today.getTime() - new Date(d.date).getTime()) / 86400000);
+      const days = Math.floor((today.getTime() - parseLocalDate(d.date).getTime()) / 86400000);
       notifications.push({
         id: `oldquote-${d.id}`,
         color: "yellow",
-        title: "Devis sans réponse",
+        title: "Facture sans réponse",
         message: `${d.number} — sans réponse depuis ${days} jours`,
         documentId: d.id,
         documentNumber: d.number,
       });
     });
 
-  // Rose — Aucune facture ce mois-ci
+  // 🟣 Violet — Aucune facture ce mois-ci
   const hasInvoiceThisMonth = documents.some((d) => {
-    const date = new Date(d.date);
+    const date = parseLocalDate(d.date);
     return d.type === "facture" && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
   });
   if (!hasInvoiceThisMonth) {
@@ -647,8 +655,8 @@ export async function computeNotifications(): Promise<AppNotification[]> {
     });
   }
 
-  // 🟢 Vert — Tout va bien (aucune autre alerte)
-  if (notifications.length === 0) {
+  // ✅ Vert — Tout va bien (aucune alerte ET au moins une facture ce mois-ci)
+  if (notifications.length === 0 && hasInvoiceThisMonth) {
     notifications.push({
       id: "all-good",
       color: "green",
