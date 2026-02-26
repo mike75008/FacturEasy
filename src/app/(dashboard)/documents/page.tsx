@@ -197,6 +197,7 @@ export default function DocumentsPage() {
   async function handleSaveDocument() {
     if (!clientId) { alert("Sélectionnez un client"); return; }
     if (lines.every((l) => !l.description)) { alert("Ajoutez au moins une ligne"); return; }
+    if (dueDate && dueDate < docDate) { alert("La date d'échéance ne peut pas être antérieure à la date de création."); return; }
 
     setSaving(true);
     setError(null);

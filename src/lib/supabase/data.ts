@@ -582,7 +582,7 @@ export async function computeNotifications(): Promise<AppNotification[]> {
       notifications.push({
         id: `late-${d.id}`,
         color: "red",
-        title: "Facture en retard",
+        title: "Facture en retard ",
         message: `${d.number} — en retard de ${days} jour${days > 1 ? "s" : ""}`,
         documentId: d.id,
         documentNumber: d.number,
