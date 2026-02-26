@@ -48,6 +48,7 @@ export default function DashboardPage() {
   const [gamification] = useState(() => getUserGamification());
   const [chartAnimated, setChartAnimated] = useState(false);
   const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [roiIndex, setRoiIndex] = useState(0);
 
   async function loadData() {
     try {
@@ -105,6 +106,11 @@ export default function DashboardPage() {
     }
   }, [loading]);
 
+  useEffect(() => {
+    const interval = setInterval(() => setRoiIndex((i) => (i + 1) % 4), 4000);
+    return () => clearInterval(interval);
+  }, []);
+
   const stats = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -159,6 +165,44 @@ export default function DashboardPage() {
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 5);
   }, [documents]);
+
+  function roiColor(score: number): string {
+    if (score >= 80) return "#34d399";
+    if (score >= 60) return "#d4af37";
+    if (score >= 40) return "#f59e0b";
+    return "#ef4444";
+  }
+
+  const roiMetrics = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 1. Taux de paiement
+    const tauxScore = Math.round(stats.paymentRate);
+
+    // 2. Recouvrement — encaissé vs total émis
+    const totalEmis = stats.totalCA + stats.pendingTotal + stats.overdueTotal;
+    const recouvrementScore = totalEmis > 0 ? Math.round((stats.totalCA / totalEmis) * 100) : 0;
+
+    // 3. Délai moyen — jours de retard moyen sur factures en retard
+    const overdueInvoices = documents.filter(
+      (d) => d.type === "facture" && d.status !== "paye" && d.status !== "annule" && d.due_date && new Date(d.due_date) < today
+    );
+    const avgDelay = overdueInvoices.length > 0
+      ? Math.round(overdueInvoices.reduce((sum, d) => sum + Math.floor((today.getTime() - new Date(d.due_date!).getTime()) / 86400000), 0) / overdueInvoices.length)
+      : 0;
+    const delaiScore = Math.max(0, Math.round(100 - (avgDelay / 30) * 100));
+
+    // 4. Santé globale — moyenne des 3 scores
+    const santeScore = Math.round((tauxScore + recouvrementScore + delaiScore) / 3);
+
+    return [
+      { label: "Taux de paiement", value: tauxScore, display: `${tauxScore}%`, detail: `${stats.invoiceCount} facture${stats.invoiceCount > 1 ? "s" : ""}`, score: tauxScore },
+      { label: "Recouvrement", value: recouvrementScore, display: `${recouvrementScore}%`, detail: `${formatCurrency(stats.totalCA)} encaissés`, score: recouvrementScore },
+      { label: "Délai moyen", value: avgDelay, display: avgDelay === 0 ? "0 j" : `${avgDelay} j`, detail: `${overdueInvoices.length} facture${overdueInvoices.length > 1 ? "s" : ""} en retard`, score: delaiScore },
+      { label: "Santé globale", value: santeScore, display: `${santeScore}%`, detail: "Score composite", score: santeScore },
+    ];
+  }, [documents, stats]);
 
   function getClientName(clientId: string): string {
     const c = clientsList.find((cl) => cl.id === clientId);
@@ -516,65 +560,98 @@ export default function DashboardPage() {
             </GlassCard>
           </div>
 
-          {/* ROI — dimensions originales de Documents récents */}
+          {/* ROI — 4 indicateurs switchables */}
           <div>
             <GlassCard glow className="relative overflow-hidden h-full">
-              <div className="absolute inset-0 bg-gradient-to-r from-gold-400/[0.05] to-transparent" />
-              <div className="relative">
-                {/* Titre centré */}
-                <div className="flex items-center gap-2 mb-20">
-                  <Sparkles className="w-5 h-5 text-gold-400" />
-                  <h3 className="text-lg font-display font-semibold">ROI FacturePro</h3>
-                </div>
-                {/* Contenu : sac | % | cercle */}
-                <div className="flex items-center justify-between gap-3">
-                  {/* Money Bag */}
-                  <div className="relative flex-shrink-0 animate-float">
-                    <svg width="120" height="120" viewBox="0 0 80 80" className="drop-shadow-[0_0_15px_rgba(212,175,55,0.3)]">
-                      <path d="M20 35C18 45 15 55 16 62C17 70 25 75 40 75C55 75 63 70 64 62C65 55 62 45 60 35C58 28 52 25 40 25C28 25 22 28 20 35Z" fill="url(#bagGradient)" stroke="#c9a84c" strokeWidth="1.5" />
-                      <path d="M30 25C30 25 33 20 40 20C47 20 50 25 50 25" fill="none" stroke="#c9a84c" strokeWidth="2" strokeLinecap="round" />
-                      <ellipse cx="40" cy="18" rx="6" ry="4" fill="#d4af37" stroke="#c9a84c" strokeWidth="1" />
-                      <path d="M36 15C38 10 42 10 44 15" fill="none" stroke="#c9a84c" strokeWidth="1.5" strokeLinecap="round" />
-                      <text x="40" y="55" textAnchor="middle" fill="#1e3a5f" fontSize="22" fontWeight="bold" fontFamily="serif">€</text>
-                      <ellipse cx="30" cy="40" rx="4" ry="8" fill="rgba(255,255,255,0.15)" transform="rotate(-15 30 40)" />
-                      <defs>
-                        <linearGradient id="bagGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#e6c252" />
-                          <stop offset="50%" stopColor="#d4af37" />
-                          <stop offset="100%" stopColor="#c9a84c" />
-                        </linearGradient>
-                      </defs>
-                    </svg>
-                    <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gold-400 border border-gold-300 flex items-center justify-center text-[8px] font-bold text-atlantic-900 animate-bounce">€</div>
+              <div className="absolute inset-0 bg-gradient-to-br from-atlantic-800/20 to-transparent" />
+              <div className="relative flex flex-col h-full gap-4">
+
+                {/* Titre + 4 dots */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-gold-400" />
+                    <h3 className="text-lg font-display font-semibold">ROI FacturEasy</h3>
                   </div>
-                  {/* % */}
-                  <div className="text-center flex-1">
-                    <div className="text-5xl font-display font-bold animated-gold-text">
-                      <AnimatedCounter target={gaugeRate} suffix="%" duration={2} />
-                    </div>
-                    <p className="text-[10px] font-sans text-atlantic-200/40 mt-1">
-                      {stats.totalCA > 0 ? `${formatCurrency(stats.totalCA)} encaissés` : "aucun encaissement"}
-                    </p>
-                  </div>
-                  {/* Cercle */}
-                  <div className="w-28 h-28 relative flex-shrink-0">
-                    <svg className="w-28 h-28 -rotate-90" viewBox="0 0 96 96">
-                      <circle cx="48" cy="48" r="40" fill="none" stroke="rgba(212,175,55,0.08)" strokeWidth="7" />
-                      <circle cx="48" cy="48" r="40" fill="none" stroke="url(#gaugeGrad)" strokeWidth="7" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={gaugeOffset} className="transition-all duration-[2s] ease-out" />
-                      <defs>
-                        <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="#ef4444" />
-                          <stop offset="40%" stopColor="#f59e0b" />
-                          <stop offset="70%" stopColor="#c9a84c" />
-                          <stop offset="100%" stopColor="#22c55e" />
-                        </linearGradient>
-                      </defs>
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Star className="w-4 h-4 text-gold-400 animate-pulse" />
-                    </div>
+                  <div className="flex items-center gap-1.5">
+                    {roiMetrics.map((m, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setRoiIndex(i)}
+                        className="w-2.5 h-2.5 rounded-full transition-all duration-300"
+                        style={{ backgroundColor: i === roiIndex ? roiColor(m.score) : "rgba(255,255,255,0.15)", transform: i === roiIndex ? "scale(1.4)" : "scale(1)" }}
+                        title={m.label}
+                      />
+                    ))}
                   </div>
                 </div>
+
+                {/* Indicateur actif */}
+                {(() => {
+                  const active = roiMetrics[roiIndex];
+                  const color = roiColor(active.score);
+                  const pulseSpeed = active.score >= 80 ? "3s" : active.score >= 50 ? "2s" : "1s";
+                  const bagFilter = active.score >= 80
+                    ? "drop-shadow(0 0 18px rgba(52,211,153,0.5))"
+                    : active.score >= 60
+                    ? "drop-shadow(0 0 18px rgba(212,175,55,0.5))"
+                    : active.score >= 40
+                    ? "drop-shadow(0 0 18px rgba(245,158,11,0.5))"
+                    : "drop-shadow(0 0 18px rgba(239,68,68,0.5))";
+                  const bagColor1 = active.score >= 80 ? "#6ee7b7" : active.score >= 60 ? "#e6c252" : active.score >= 40 ? "#fbbf24" : "#fca5a5";
+                  const bagColor2 = active.score >= 80 ? "#34d399" : active.score >= 60 ? "#d4af37" : active.score >= 40 ? "#f59e0b" : "#ef4444";
+                  const bagColor3 = active.score >= 80 ? "#059669" : active.score >= 60 ? "#c9a84c" : active.score >= 40 ? "#d97706" : "#dc2626";
+
+                  return (
+                    <div className="flex flex-col items-center gap-2 flex-1 justify-center">
+                      {/* Label */}
+                      <p className="text-xs font-sans uppercase tracking-widest" style={{ color }}>{active.label}</p>
+
+                      {/* Sac + halo pulsant */}
+                      <div className="relative flex items-center justify-center">
+                        <div className="absolute w-28 h-28 rounded-full opacity-15 animate-ping" style={{ backgroundColor: color, animationDuration: pulseSpeed }} />
+                        <svg width="110" height="110" viewBox="0 0 80 80" style={{ filter: bagFilter, transition: "filter 1s ease" }}>
+                          <path d="M20 35C18 45 15 55 16 62C17 70 25 75 40 75C55 75 63 70 64 62C65 55 62 45 60 35C58 28 52 25 40 25C28 25 22 28 20 35Z" fill={`url(#bagGrad-${roiIndex})`} stroke={bagColor3} strokeWidth="1.5" />
+                          <path d="M30 25C30 25 33 20 40 20C47 20 50 25 50 25" fill="none" stroke={bagColor3} strokeWidth="2" strokeLinecap="round" />
+                          <ellipse cx="40" cy="18" rx="6" ry="4" fill={bagColor2} stroke={bagColor3} strokeWidth="1" />
+                          <path d="M36 15C38 10 42 10 44 15" fill="none" stroke={bagColor3} strokeWidth="1.5" strokeLinecap="round" />
+                          <text x="40" y="55" textAnchor="middle" fill="#1e3a5f" fontSize="22" fontWeight="bold" fontFamily="serif">€</text>
+                          <ellipse cx="30" cy="40" rx="4" ry="8" fill="rgba(255,255,255,0.15)" transform="rotate(-15 30 40)" />
+                          <defs>
+                            <linearGradient id={`bagGrad-${roiIndex}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor={bagColor1} />
+                              <stop offset="50%" stopColor={bagColor2} />
+                              <stop offset="100%" stopColor={bagColor3} />
+                            </linearGradient>
+                          </defs>
+                        </svg>
+                        <div className="absolute -top-1 -right-1 w-10 h-10 rounded-full border-2 flex items-center justify-center text-[11px] font-bold text-white animate-bounce" style={{ backgroundColor: color, borderColor: bagColor1 }}>
+                          {active.display}
+                        </div>
+                      </div>
+
+                      {/* Détail */}
+                      <p className="text-[10px] font-sans text-atlantic-200/40 text-center">{active.detail}</p>
+
+                      {/* Barre animée */}
+                      <div className="w-full h-1.5 rounded-full bg-atlantic-800/50 overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-[1.5s] ease-out" style={{ width: `${active.score}%`, backgroundColor: color }} />
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Stats fixes en bas */}
+                <div className="flex justify-between pt-2 border-t border-gold-400/10">
+                  <div>
+                    <p className="text-[9px] font-sans text-atlantic-200/30 uppercase tracking-wider">Encaissé</p>
+                    <p className="text-xs font-sans font-semibold text-emerald-400">{formatCurrency(stats.totalCA)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] font-sans text-atlantic-200/30 uppercase tracking-wider">En attente</p>
+                    <p className="text-xs font-sans font-semibold text-amber-400">{formatCurrency(stats.pendingTotal)}</p>
+                  </div>
+                </div>
+
               </div>
             </GlassCard>
           </div>
