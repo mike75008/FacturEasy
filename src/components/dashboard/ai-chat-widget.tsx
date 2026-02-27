@@ -52,7 +52,7 @@ export function AIChatWidget() {
       const pendingTotal = pending.reduce((sum, d) => sum + d.total_ttc, 0);
 
       return `
-Tu es l'assistant IA intégré à FacturePro, l'application de facturation de ${org?.name || "cette entreprise"}.
+Tu es l'assistant IA intégré à FacturEasy, l'application de facturation de ${org?.name || "cette entreprise"}.
 Tu as accès aux données réelles de l'utilisateur. Utilise-les pour répondre avec précision.
 Réponds toujours en français, de façon concise et utile.
 
@@ -83,7 +83,7 @@ ${documents
   .join("\n")}
 `.trim();
     } catch {
-      return `Tu es l'assistant IA intégré à FacturePro, une application de facturation française.
+      return `Tu es l'assistant IA intégré à FacturEasy, une application de facturation française.
 Tu aides les utilisateurs avec leurs questions sur la facturation, la TVA, les relances, etc.
 Réponds toujours en français.`;
     }
@@ -149,7 +149,7 @@ Réponds toujours en français.`;
               </div>
               <div>
                 <p className="text-xs font-sans font-semibold text-white">Assistant IA</p>
-                <p className="text-[9px] font-sans text-atlantic-200/40">FacturePro AI · En ligne</p>
+                <p className="text-[9px] font-sans text-atlantic-200/40">FacturEasy AI · En ligne</p>
               </div>
             </div>
             <button

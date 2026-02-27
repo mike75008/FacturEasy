@@ -18,7 +18,7 @@ export function Logo({ size = "md", className }: LogoProps) {
     <Link href="/" className={className}>
       <h1 className={`font-display font-bold ${sizes[size]}`}>
         <span className="gold-text">Facture</span>
-        <span className="text-white">Pro</span>
+        <span className="text-white">Easy</span>
       </h1>
       <p className="text-atlantic-200/60 text-sm font-sans tracking-wider uppercase">
         Facturation Intelligente

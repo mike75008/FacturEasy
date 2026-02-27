@@ -78,7 +78,7 @@ const workflow = [
 ];
 
 const testimonials = [
-  { name: "Marie Dubois", role: "Architecte d'intérieur", text: "FacturePro a transformé ma gestion. Les relances IA me font gagner 3h par semaine.", rating: 5 },
+  { name: "Marie Dubois", role: "Architecte d'intérieur", text: "FacturEasy a transformé ma gestion. Les relances IA me font gagner 3h par semaine.", rating: 5 },
   { name: "Thomas Laurent", role: "Consultant IT", text: "La conformité légale automatique m'enlève un poids énorme. Plus besoin de vérifier chaque mention.", rating: 5 },
   { name: "Sophie Martin", role: "Artisan plombier", text: "Enfin un outil qui comprend mon métier. Les unités personnalisables changent tout.", rating: 5 },
 ];
@@ -114,8 +114,8 @@ export default function HomePage() {
             <Sparkles className="w-4 h-4 text-atlantic-900" />
           </div>
           <span className="text-lg font-display font-bold">
-            <span className="animated-gold-text">Facture</span>
-            <span className="text-white">Pro</span>
+            <span className="animated-gold-text">Factur</span>
+            <span className="text-white">Easy</span>
           </span>
         </Link>
 
@@ -358,7 +358,7 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div>
               <h3 className="font-display text-2xl font-bold mb-2">
-                <span className="gold-text">Facture</span><span className="text-white">Pro</span>
+                <span className="gold-text">Factur</span><span className="text-white">Easy</span>
               </h3>
               <p className="text-sm font-sans text-atlantic-200/50">Facturation intelligente pour professionnels exigeants.</p>
             </div>
@@ -388,7 +388,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="border-t border-gold-400/10 pt-8 text-center text-atlantic-200/30 text-xs font-sans">
-            <p>&copy; 2026 FacturePro. Tous droits réservés. Conçu avec excellence en France.</p>
+            <p>&copy; 2026 FacturEasy. Tous droits réservés. Conçu avec excellence en France.</p>
           </div>
         </div>
       </footer>

@@ -96,7 +96,7 @@ export function AIChatPanel({ open, onClose }: AIChatPanelProps) {
             </div>
             <div>
               <p className="text-sm font-sans font-semibold text-white">Assistant IA</p>
-              <p className="text-[10px] font-sans text-atlantic-200/40">FacturePro AI</p>
+              <p className="text-[10px] font-sans text-atlantic-200/40">FacturEasy AI</p>
             </div>
           </div>
           <button

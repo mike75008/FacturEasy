@@ -81,7 +81,7 @@ export default function WelcomePage() {
             <Sparkles className="w-4 h-4 text-atlantic-900" />
           </div>
           <span className="text-lg font-display font-bold text-white group-hover:text-gold-400 transition-colors">
-            FacturePro
+            FacturEasy
           </span>
         </Link>
 
@@ -156,14 +156,14 @@ export default function WelcomePage() {
           </div>
 
           <h1 className="text-4xl md:text-6xl font-display font-bold leading-[1.1] mb-6">
-            FacturePro s&apos;adapte
+            FacturEasy s&apos;adapte
             <br />
             <span className="animated-gold-text">à votre activité</span>
           </h1>
 
           <p className="text-lg md:text-xl text-atlantic-200/60 font-body max-w-2xl mx-auto mb-10">
             Freelance, TPE, PME ou agence — explorez les menus ci-dessus pour découvrir
-            ce que FacturePro peut faire pour vous.
+            ce que FacturEasy peut faire pour vous.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">

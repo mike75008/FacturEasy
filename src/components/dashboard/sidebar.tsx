@@ -87,8 +87,8 @@ export function Sidebar() {
         >
           <Link href="/">
             <h1 className="font-display text-xl font-bold whitespace-nowrap">
-              <span className="animated-gold-text">Facture</span>
-              <span className="text-white">Pro</span>
+              <span className="animated-gold-text">Factur</span>
+              <span className="text-white">Easy</span>
             </h1>
           </Link>
         </div>

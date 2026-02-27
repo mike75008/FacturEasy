@@ -17,7 +17,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "FacturePro - Facturation Intelligente",
+  title: "FacturEasy - Facturation Intelligente",
   description:
     "Solution de facturation universelle avec IA intégrée pour tous les corps de métiers",
 };

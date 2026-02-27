@@ -285,7 +285,7 @@ export function InvoicePDFDocument({
     <Document
       title={doc.number}
       author={organization.name}
-      creator="FacturePro"
+      creator="FacturEasy"
     >
       <Page size="A4" style={s.page}>
         {/* Bande or top */}
