@@ -12,7 +12,6 @@ import {
 import {
   getReminders as getRemindersLS,
   saveReminder as saveReminderLS,
-  getDocuments,
   getClients as getClientsLS,
 } from "@/lib/local-storage";
 import {
@@ -20,6 +19,7 @@ import {
   saveReminder as saveReminderDB,
   markReminderSent,
   getClients as getClientsDB,
+  getDocuments as getDocumentsDB,
 } from "@/lib/supabase/data";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import type { Reminder, Document as Doc, Client } from "@/types/database";
@@ -49,20 +49,17 @@ export default function RemindersPage() {
   const [generating, setGenerating] = useState(false);
 
   async function loadData() {
-    // Documents : encore en localStorage (pas migré)
-    setDocs(getDocuments());
-    // Clients : Supabase avec fallback localStorage
     try {
-      const c = await getClientsDB();
-      setClientsState(c.length > 0 ? c : getClientsLS());
+      const [docsData, clientsData, remindersData] = await Promise.all([
+        getDocumentsDB(),
+        getClientsDB(),
+        getRemindersDB(),
+      ]);
+      setDocs(docsData);
+      setClientsState(clientsData.length > 0 ? clientsData : getClientsLS());
+      setReminders(remindersData.length > 0 ? remindersData : getRemindersLS());
     } catch {
       setClientsState(getClientsLS());
-    }
-    // Relances : Supabase avec fallback localStorage
-    try {
-      const r = await getRemindersDB();
-      setReminders(r.length > 0 ? r : getRemindersLS());
-    } catch {
       setReminders(getRemindersLS());
     }
   }
