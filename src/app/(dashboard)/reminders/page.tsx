@@ -68,6 +68,13 @@ export default function RemindersPage() {
     loadData();
   }, []);
 
+  // Auto-génération dès qu'une facture est sélectionnée
+  useEffect(() => {
+    if (!selectedDocId) return;
+    generateAIReminder();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDocId]);
+
   const overdueInvoices = useMemo(() => {
     return documents.filter((d) => {
       if (d.type !== "facture" || d.status === "paye" || d.status === "annule") return false;
@@ -86,7 +93,7 @@ export default function RemindersPage() {
     return Math.floor((Date.now() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24));
   }
 
-  function generateAIReminder() {
+  async function generateAIReminder() {
     const doc = documents.find((d) => d.id === selectedDocId);
     if (!doc) return;
     setGenerating(true);
@@ -95,7 +102,25 @@ export default function RemindersPage() {
     const days = doc.due_date ? getDaysOverdue(doc.due_date) : 0;
     const existingReminders = reminders.filter((r) => r.document_id === doc.id).length;
 
-    setTimeout(() => {
+    try {
+      const response = await fetch("/api/ai-reminder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          docNumber: doc.number,
+          amount: doc.total_ttc,
+          clientName,
+          daysOverdue: days,
+          existingRemindersCount: existingReminders,
+          channel,
+        }),
+      });
+
+      if (!response.ok) throw new Error("Erreur API");
+      const data = await response.json();
+      setContent(data.content);
+    } catch {
+      // Fallback sur les templates si l'IA est indisponible
       let tone = "amical";
       if (existingReminders >= 2) tone = "mise en demeure";
       else if (existingReminders >= 1) tone = "ferme";
@@ -107,9 +132,10 @@ export default function RemindersPage() {
       };
 
       setContent(templates[tone as keyof typeof templates] || templates.amical);
+    } finally {
       setPriority(existingReminders >= 2 ? "critical" : existingReminders >= 1 ? "high" : "medium");
       setGenerating(false);
-    }, 1500);
+    }
   }
 
   async function handleCreateReminder() {

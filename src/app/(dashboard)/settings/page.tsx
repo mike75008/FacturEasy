@@ -148,7 +148,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <PageTransition>
-        <Topbar title="Paramètres" subtitle="Configuration de votre entreprise" />
+        <Topbar title="Profil" subtitle="Configuration de votre entreprise" />
         <div className="p-6 flex items-center justify-center py-20">
           <div className="text-center">
             <div className="w-8 h-8 rounded-full border-2 border-gold-400/30 border-t-gold-400 animate-spin mx-auto mb-4" />
@@ -163,7 +163,7 @@ export default function SettingsPage() {
 
   return (
     <PageTransition>
-      <Topbar title="Paramètres" subtitle="Configuration de votre entreprise" />
+      <Topbar title="Profil" subtitle="Configuration de votre entreprise" />
       <div className="p-6">
         {/* Tabs */}
         <div className="flex gap-1 p-1 rounded-xl bg-atlantic-800/30 w-fit mb-6">

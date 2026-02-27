@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Package, FileText, Settings, Bell,
   Activity, Brain, ChevronLeft, ChevronRight, LogOut, Sparkles,
-  Menu, X,
+  Menu, X, UserCircle,
 } from "lucide-react";
 
 const navItems = [
@@ -17,7 +17,8 @@ const navItems = [
   { href: "/products", label: "Produits", icon: Package },
   { href: "/reminders", label: "Relances", icon: Bell },
   { href: "/monitoring", label: "Monitoring", icon: Activity },
-  { href: "/settings", label: "Paramètres", icon: Settings },
+  { href: "/settings", label: "Profil", icon: UserCircle },
+  { href: "/parametres", label: "Paramètres", icon: Settings },
 ];
 
 // Spring easing — dépasse légèrement puis se pose, c'est ça la grâce
