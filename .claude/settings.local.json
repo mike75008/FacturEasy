@@ -28,7 +28,8 @@
       "Bash(npx next build)",
       "Bash(npm run build:*)",
       "Bash(git -C \"C:/Users/hagbe/Downloads/facturation template universelle\" diff --stat)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(cmd:*)"
     ]
   }
 }
