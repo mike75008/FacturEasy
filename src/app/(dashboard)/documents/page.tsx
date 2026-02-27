@@ -90,6 +90,8 @@ export default function DocumentsPage() {
   const [discountPercent, setDiscountPercent] = useState(0);
   const [lines, setLines] = useState<LineForm[]>([emptyLine()]);
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [previewNumber, setPreviewNumber] = useState("");
+  const [numberLoading, setNumberLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -182,7 +184,7 @@ export default function DocumentsPage() {
     setLines(newLines);
   }
 
-  function openCreate(type: "facture" | "devis") {
+  async function openCreate(type: "facture" | "devis") {
     setDocType(type);
     setClientId("");
     setDocDate(new Date().toISOString().split("T")[0]);
@@ -191,7 +193,18 @@ export default function DocumentsPage() {
     setDiscountPercent(0);
     setLines([emptyLine()]);
     setEditingDocId(null);
+    setPreviewNumber("");
     setView("create");
+    // Génère et réserve le numéro immédiatement — comme Jira, Sage, etc.
+    setNumberLoading(true);
+    try {
+      const num = await generateDocumentNumberDB(type);
+      setPreviewNumber(num);
+    } catch {
+      setPreviewNumber("");
+    } finally {
+      setNumberLoading(false);
+    }
   }
 
   async function handleSaveDocument() {
@@ -206,7 +219,7 @@ export default function DocumentsPage() {
       if (editingDocId) {
         number = documents.find((d) => d.id === editingDocId)?.number || "";
       } else {
-        number = await generateDocumentNumberDB(docType);
+        number = previewNumber || await generateDocumentNumberDB(docType);
       }
 
       const docPayload = {
@@ -387,9 +400,14 @@ export default function DocumentsPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
                 <GlassCard hover={false}>
-                  <h3 className="text-lg font-display font-semibold mb-4">
-                    {docType === "facture" ? "Nouvelle facture" : "Nouveau devis"}
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-display font-semibold">
+                      {docType === "facture" ? "Nouvelle facture" : "Nouveau devis"}
+                    </h3>
+                    <span className="text-sm font-sans font-semibold text-gold-400">
+                      {numberLoading ? "Génération..." : previewNumber}
+                    </span>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-sans font-medium text-gold-300 mb-2">Client *</label>
