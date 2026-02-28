@@ -12,14 +12,10 @@ import {
 } from "lucide-react";
 import {
   runAnomalyDetection, getAnomalies, resolveAnomaly,
-  getDocuments as getDocumentsLS,
 } from "@/lib/local-storage";
 import type { LocalAnomaly } from "@/lib/local-storage";
-import {
-  getDocuments as getDocumentsDB,
-} from "@/lib/supabase/data";
+import { useAppContext } from "@/lib/context/app-context";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
-import type { Document as Doc } from "@/types/database";
 
 const SEVERITY_CONFIG = {
   info: { color: "text-blue-400", bg: "bg-blue-400/10", border: "border-blue-400/20", icon: Eye },
@@ -36,23 +32,14 @@ const TYPE_CONFIG: Record<string, { icon: React.ComponentType<{ className?: stri
 };
 
 export default function MonitoringPage() {
+  const { documents } = useAppContext();
   const [anomalies, setAnomalies] = useState<LocalAnomaly[]>([]);
-  const [documents, setDocuments] = useState<Doc[]>([]);
   const [scanning, setScanning] = useState(false);
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "active" | "resolved">("all");
 
   useEffect(() => {
     setAnomalies(getAnomalies());
-    async function loadDocs() {
-      try {
-        const data = await getDocumentsDB();
-        setDocuments(data.length > 0 ? data : getDocumentsLS());
-      } catch {
-        setDocuments(getDocumentsLS());
-      }
-    }
-    loadDocs();
   }, []);
 
   const invoiceCount = documents.filter((d) => d.type === "facture").length;

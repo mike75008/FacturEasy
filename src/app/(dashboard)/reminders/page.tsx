@@ -10,17 +10,13 @@ import {
   CheckCircle2, Sparkles, ChevronRight, MessageSquare,
 } from "lucide-react";
 import {
-  getReminders as getRemindersLS,
   saveReminder as saveReminderLS,
-  getClients as getClientsLS,
 } from "@/lib/local-storage";
 import {
-  getReminders as getRemindersDB,
   saveReminder as saveReminderDB,
   markReminderSent,
-  getClients as getClientsDB,
-  getDocuments as getDocumentsDB,
 } from "@/lib/supabase/data";
+import { useAppContext } from "@/lib/context/app-context";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import type { Reminder, Document as Doc, Client } from "@/types/database";
 
@@ -38,9 +34,8 @@ const CHANNEL_ICONS = {
 };
 
 export default function RemindersPage() {
-  const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [documents, setDocs] = useState<Doc[]>([]);
-  const [clients, setClientsState] = useState<Client[]>([]);
+  const { reminders: ctxReminders, documents, clients, refreshReminders } = useAppContext();
+  const [reminders, setReminders] = useState<Reminder[]>(ctxReminders);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedDocId, setSelectedDocId] = useState("");
   const [channel, setChannel] = useState<"email" | "sms" | "appel">("email");
@@ -48,25 +43,10 @@ export default function RemindersPage() {
   const [content, setContent] = useState("");
   const [generating, setGenerating] = useState(false);
 
-  async function loadData() {
-    try {
-      const [docsData, clientsData, remindersData] = await Promise.all([
-        getDocumentsDB(),
-        getClientsDB(),
-        getRemindersDB(),
-      ]);
-      setDocs(docsData);
-      setClientsState(clientsData.length > 0 ? clientsData : getClientsLS());
-      setReminders(remindersData.length > 0 ? remindersData : getRemindersLS());
-    } catch {
-      setClientsState(getClientsLS());
-      setReminders(getRemindersLS());
-    }
-  }
-
   useEffect(() => {
-    loadData();
-  }, []);
+    setReminders(ctxReminders);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctxReminders]);
 
   // Auto-génération dès qu'une facture est sélectionnée
   useEffect(() => {
@@ -143,12 +123,9 @@ export default function RemindersPage() {
     const payload = { document_id: selectedDocId, channel, priority, content, ai_generated: true };
     try {
       await saveReminderDB(payload);
-      const updated = await getRemindersDB();
-      setReminders(updated);
+      await refreshReminders();
     } catch {
-      // Fallback localStorage
       saveReminderLS(payload);
-      setReminders(getRemindersLS());
     }
     setShowCreate(false);
     setContent("");

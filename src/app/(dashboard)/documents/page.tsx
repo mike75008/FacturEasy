@@ -13,25 +13,21 @@ import {
 } from "lucide-react";
 import {
   verifyDocument, addDocumentValidation, getDocumentValidations,
-  getDocuments as getDocumentsLS, saveDocument as saveDocumentLS,
+  saveDocument as saveDocumentLS,
   deleteDocument as deleteDocumentLS, deleteDocumentLines as deleteDocumentLinesLS,
-  getDocumentLines as getDocumentLinesLS, saveDocumentLine as saveDocumentLineLS,
-  getClients as getClientsLS, getProducts as getProductsLS,
-  generateDocumentNumber as generateDocumentNumberLS,
+  getDocumentLines as getDocumentLinesLS,
   getOrganization, getClient,
 } from "@/lib/supabase/data";
 import type { VerificationResult, LocalValidation } from "@/lib/supabase/data";
 import {
-  getDocuments as getDocumentsDB,
   saveDocument as saveDocumentDB,
   deleteDocument as deleteDocumentDB,
   getDocumentLines as getDocumentLinesDB,
   replaceDocumentLines as replaceDocumentLinesDB,
   generateDocumentNumber as generateDocumentNumberDB,
-  getClients as getClientsDB,
-  getProducts as getProductsDB,
   getOrganization as getOrganizationDB,
 } from "@/lib/supabase/data";
+import { useAppContext } from "@/lib/context/app-context";
 import { downloadInvoicePDF } from "@/components/pdf/invoice-pdf";
 import type { Organization } from "@/types/database";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
@@ -72,9 +68,7 @@ const emptyLine = (): LineForm => ({
 });
 
 export default function DocumentsPage() {
-  const [documents, setDocuments] = useState<Doc[]>([]);
-  const [clients, setClientsState] = useState<Client[]>([]);
-  const [products, setProductsState] = useState<Product[]>([]);
+  const { documents, clients, products, dataLoading: loading, refreshDocuments } = useAppContext();
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<DocTypeFilter>("all");
   const [view, setView] = useState<ViewMode>("list");
@@ -92,31 +86,8 @@ export default function DocumentsPage() {
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [previewNumber, setPreviewNumber] = useState("");
   const [numberLoading, setNumberLoading] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const [docsData, clientsData, productsData] = await Promise.all([
-          getDocumentsDB(),
-          getClientsDB(),
-          getProductsDB(),
-        ]);
-        setDocuments(docsData);
-        setClientsState(clientsData);
-        setProductsState(productsData);
-      } catch {
-        setDocuments([]);
-        setClientsState([]);
-        setProductsState([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadData();
-  }, []);
 
   const filtered = useMemo(() => {
     return documents
@@ -261,14 +232,7 @@ export default function DocumentsPage() {
         });
 
       await replaceDocumentLinesDB(savedDoc.id, docLines);
-
-      try {
-        const updated = await getDocumentsDB();
-        setDocuments(updated);
-      } catch {
-        setDocuments([]);
-      }
-
+      await refreshDocuments();
       setView("list");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erreur lors de la sauvegarde");
@@ -290,10 +254,10 @@ export default function DocumentsPage() {
 
   async function updateStatus(doc: Doc, status: string) {
     const updated = { ...doc, status: status as Doc["status"] };
-    setDocuments((prev) => prev.map((d) => d.id === doc.id ? updated : d));
     if (selectedDoc?.id === doc.id) setSelectedDoc(updated);
     try {
       await saveDocumentDB(updated);
+      await refreshDocuments();
     } catch {
       saveDocumentLS(updated);
     }
@@ -307,23 +271,8 @@ export default function DocumentsPage() {
       deleteDocumentLinesLS(id);
       deleteDocumentLS(id);
     }
-    try {
-      const updated = await getDocumentsDB();
-      setDocuments(updated);
-    } catch {
-      setDocuments([]);
-    }
+    await refreshDocuments();
     setView("list");
-  }
-
-  async function refreshDocuments() {
-    try {
-      const docs = await getDocumentsDB();
-      setDocuments(docs);
-      if (selectedDoc) setSelectedDoc(docs.find((d) => d.id === selectedDoc.id) || null);
-    } catch {
-      setDocuments([]);
-    }
   }
 
   return (

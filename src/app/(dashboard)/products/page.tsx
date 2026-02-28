@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Topbar } from "@/components/dashboard/topbar";
 import { GlassCard } from "@/components/premium/glass-card";
 import { PremiumButton } from "@/components/premium/premium-button";
@@ -10,10 +10,10 @@ import {
   Package, Plus, Search, Edit2, Trash2, Tag, Check, X,
 } from "lucide-react";
 import {
-  getProducts as getProductsDB,
   saveProduct as saveProductDB,
   deleteProduct as deleteProductDB,
 } from "@/lib/supabase/data";
+import { useAppContext } from "@/lib/context/app-context";
 import { formatCurrency } from "@/lib/utils";
 import type { Product } from "@/types/database";
 
@@ -29,28 +29,13 @@ const TVA_RATES = [
 ];
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { products, dataLoading: loading, refreshProducts } = useAppContext();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
 
-  async function loadProducts() {
-    try {
-      const data = await getProductsDB();
-      setProducts(data);
-    } catch (e) {
-      setError("Impossible de charger les produits");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadProducts();
-  }, []);
 
   const filtered = useMemo(() => {
     if (!search) return products;
@@ -76,7 +61,7 @@ export default function ProductsPage() {
     setError(null);
     try {
       await saveProductDB(editing);
-      await loadProducts();
+      await refreshProducts();
       setShowForm(false);
       setEditing(null);
     } catch (e: any) {
@@ -90,7 +75,7 @@ export default function ProductsPage() {
     if (!confirm("Supprimer ce produit ?")) return;
     try {
       await deleteProductDB(id);
-      await loadProducts();
+      await refreshProducts();
     } catch (e: any) {
       setError(e.message || "Erreur lors de la suppression");
     }

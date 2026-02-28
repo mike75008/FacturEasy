@@ -7,25 +7,12 @@ import { AnimatedCounter } from "@/components/premium/animated-counter";
 import { PageTransition } from "@/components/premium/page-transition";
 import {
   FileText, Users, TrendingUp, AlertTriangle, Clock, ArrowUpRight,
-  Sparkles, BarChart3, CheckCircle2, XCircle, Package, Bell, Send,
+  Sparkles, BarChart3, CheckCircle2, XCircle, Package, Bell,
   Award, Shield, Crown, Zap, Trophy, Rocket, Star,
 } from "lucide-react";
-import {
-  getUserGamification,
-  getDocuments as getDocumentsLS,
-  getClients as getClientsLS,
-  getProducts as getProductsLS,
-  getReminders as getRemindersLS,
-} from "@/lib/local-storage";
-import {
-  getDocuments as getDocumentsDB,
-  getClients as getClientsDB,
-  getProducts as getProductsDB,
-  getReminders as getRemindersDB,
-} from "@/lib/supabase/data";
-import { createClient } from "@/lib/supabase/client";
+import { getUserGamification } from "@/lib/local-storage";
+import { useAppContext } from "@/lib/context/app-context";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { Document as Doc, Client, Product, Reminder } from "@/types/database";
 
 const LEVEL_COLORS = {
   bronze: { bg: "from-amber-700/20 to-amber-700/5", text: "text-amber-600", border: "border-amber-600/30" },
@@ -40,64 +27,10 @@ const BADGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
 };
 
 export default function DashboardPage() {
-  const [documents, setDocuments] = useState<Doc[]>([]);
-  const [clientsList, setClientsList] = useState<Client[]>([]);
-  const [productsList, setProductsList] = useState<Product[]>([]);
-  const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { documents, clients: clientsList, products: productsList, reminders, dataLoading: loading } = useAppContext();
   const [gamification] = useState(() => getUserGamification());
   const [chartAnimated, setChartAnimated] = useState(false);
-  const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [roiIndex, setRoiIndex] = useState(0);
-
-  async function loadData() {
-    try {
-      const [docsData, clientsData, productsData, remindersData] = await Promise.all([
-        getDocumentsDB(),
-        getClientsDB(),
-        getProductsDB(),
-        getRemindersDB(),
-      ]);
-      setDocuments(docsData.length > 0 ? docsData : getDocumentsLS());
-      setClientsList(clientsData.length > 0 ? clientsData : getClientsLS());
-      setProductsList(productsData.length > 0 ? productsData : getProductsLS());
-      setReminders(remindersData.length > 0 ? remindersData : getRemindersLS());
-    } catch {
-      setDocuments(getDocumentsLS());
-      setClientsList(getClientsLS());
-      setProductsList(getProductsLS());
-      setReminders(getRemindersLS());
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadData();
-
-    // Supabase Realtime — écoute chaque changement sur documents
-    const supabase = createClient();
-    const channel = supabase
-      .channel("dashboard-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "documents" },
-        () => {
-          // Rechargement des documents uniquement (stats recalculées auto)
-          getDocumentsDB().then((docs) => {
-            if (docs.length > 0) setDocuments(docs);
-          });
-        }
-      )
-      .subscribe((status) => {
-        setRealtimeConnected(status === "SUBSCRIBED");
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     if (!loading) {
@@ -308,8 +241,8 @@ export default function DashboardPage() {
         subtitle={`${stats.invoiceCount} facture${stats.invoiceCount > 1 ? "s" : ""} • ${stats.clientCount} client${stats.clientCount > 1 ? "s" : ""}`}
         extra={
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-atlantic-800/50 border border-atlantic-600/20">
-            <div className={`w-1.5 h-1.5 rounded-full ${realtimeConnected ? "bg-emerald-400 animate-pulse" : "bg-atlantic-400/30"}`} />
-            <span className="text-[10px] font-sans text-atlantic-200/40">{realtimeConnected ? "temps réel" : "connexion..."}</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[10px] font-sans text-atlantic-200/40">temps réel</span>
           </div>
         }
       />

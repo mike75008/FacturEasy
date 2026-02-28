@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Topbar } from "@/components/dashboard/topbar";
 import { GlassCard } from "@/components/premium/glass-card";
 import { PremiumButton } from "@/components/premium/premium-button";
@@ -12,18 +12,17 @@ import {
 } from "lucide-react";
 import { getDocuments } from "@/lib/local-storage";
 import {
-  getClients as getClientsDB,
   saveClient as saveClientDB,
   deleteClient as deleteClientDB,
 } from "@/lib/supabase/data";
+import { useAppContext } from "@/lib/context/app-context";
 import { formatCurrency } from "@/lib/utils";
 import type { Client } from "@/types/database";
 
 type ViewMode = "list" | "form" | "detail";
 
 export default function ClientsPage() {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { clients, dataLoading: loading, refreshClients } = useAppContext();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -32,20 +31,6 @@ export default function ClientsPage() {
   const [editingClient, setEditingClient] = useState<Partial<Client> | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
 
-  async function loadClients() {
-    try {
-      const data = await getClientsDB();
-      setClients(data);
-    } catch (e) {
-      setError("Impossible de charger les clients");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadClients();
-  }, []);
 
   const filtered = useMemo(() => {
     return clients.filter((c) => {
@@ -77,7 +62,7 @@ export default function ClientsPage() {
     setError(null);
     try {
       await saveClientDB(editingClient);
-      await loadClients();
+      await refreshClients();
       setView("list");
       setEditingClient(null);
     } catch (e: any) {
@@ -91,7 +76,7 @@ export default function ClientsPage() {
     if (!confirm("Supprimer ce client ?")) return;
     try {
       await deleteClientDB(id);
-      await loadClients();
+      await refreshClients();
       setView("list");
       setSelectedClient(null);
     } catch (e: any) {

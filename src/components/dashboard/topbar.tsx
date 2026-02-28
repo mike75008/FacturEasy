@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Search, MessageSquare, LogOut, ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { computeNotifications } from "@/lib/supabase/data";
-import type { AppNotification, NotificationColor } from "@/lib/supabase/data";
+import { useAppContext } from "@/lib/context/app-context";
+import type { NotificationColor } from "@/lib/supabase/data";
 
 interface TopbarProps {
   title: string;
@@ -15,41 +15,12 @@ interface TopbarProps {
 
 export function Topbar({ title, subtitle, extra }: TopbarProps) {
   const router = useRouter();
-  const [userName, setUserName] = useState("Utilisateur");
-  const [userEmail, setUserEmail] = useState("");
+  const { userName, userEmail, notifications } = useAppContext();
   const [showMenu, setShowMenu] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [tickerIndex, setTickerIndex] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        const name =
-          session.user.user_metadata?.full_name ||
-          session.user.email?.split("@")[0] ||
-          "Utilisateur";
-        setUserName(name);
-        setUserEmail(session.user.email || "");
-      }
-    });
-    computeNotifications().then(setNotifications).catch((e) => console.error("[topbar] notifs:", e));
-
-    // Realtime — recharge les notifs à chaque changement sur documents
-    const channel = supabase
-      .channel("topbar-notifs")
-      .on("postgres_changes", { event: "*", schema: "public", table: "documents" }, () => {
-        computeNotifications().then(setNotifications).catch((e) => console.error("[topbar] notifs:", e));
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -67,7 +38,7 @@ export function Topbar({ title, subtitle, extra }: TopbarProps) {
   async function handleLogout() {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/");
+    router.push("/login");
     router.refresh();
   }
 
