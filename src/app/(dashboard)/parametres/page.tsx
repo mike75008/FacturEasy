@@ -12,8 +12,9 @@ import {
   User, CreditCard, Users, Plug, Database, Bell,
   Check, Eye, EyeOff, Download, Upload, AlertTriangle,
   Crown, Zap, Shield, Key, Trash2, Brain, FileSpreadsheet,
-  ArrowRight, RotateCcw, CheckCircle2, XCircle,
+  ArrowRight, RotateCcw, CheckCircle2, XCircle, BarChart3,
 } from "lucide-react";
+import type { MonthlyReportData, ClientReportData } from "@/components/pdf/report-pdf";
 import {
   saveClient,
   saveProduct,
@@ -26,6 +27,7 @@ const SECTIONS = [
   { id: "notifications", label: "Notifications", icon: Bell,       subtitle: "Alertes email et rappels automatiques" },
   { id: "integrations",  label: "Intégrations",  icon: Plug,       subtitle: "Connexions externes et API" },
   { id: "donnees",       label: "Données",       icon: Database,   subtitle: "Export CSV/JSON, import, suppression" },
+  { id: "rapports",      label: "Rapports",      icon: BarChart3,  subtitle: "Rapports PDF mensuels et par client" },
 ];
 
 // ─── COMPTE ────────────────────────────────────────────────────────────────────
@@ -1028,6 +1030,447 @@ function SectionDonnees() {
   );
 }
 
+// ─── RAPPORTS ──────────────────────────────────────────────────────────────────
+
+interface EmailPending {
+  blob: Blob;
+  clientEmail: string | null;
+  clientName: string;
+  reportTitle: string;
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve((reader.result as string).split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function SectionRapports() {
+  const { documents, clients, userName } = useAppContext();
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [loadingMonthly, setLoadingMonthly] = useState(false);
+  const [loadingClient, setLoadingClient] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [msgMonthly, setMsgMonthly] = useState("");
+  const [msgClient, setMsgClient] = useState("");
+  const [msgEmail, setMsgEmail] = useState("");
+  const [emailPending, setEmailPending] = useState<EmailPending | null>(null);
+
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  const periodLabel = now.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+
+  // Factures du mois (CA)
+  const monthlyDocs = documents.filter((doc) => {
+    const d = new Date(doc.date);
+    return d.getMonth() === currentMonth && d.getFullYear() === currentYear && doc.type === "facture";
+  });
+  // Devis du mois (pipeline)
+  const monthlyDevis = documents.filter((doc) => {
+    const d = new Date(doc.date);
+    return d.getMonth() === currentMonth && d.getFullYear() === currentYear && doc.type === "devis";
+  });
+  // Avoirs du mois (impact négatif)
+  const monthlyAvoirs = documents.filter((doc) => {
+    const d = new Date(doc.date);
+    return d.getMonth() === currentMonth && d.getFullYear() === currentYear && doc.type === "avoir";
+  });
+  const paidDocs = monthlyDocs.filter((d) => d.status === "paye");
+  const totalCA = paidDocs.reduce((sum, d) => sum + d.total_ttc, 0);
+
+  const overdueDocs = documents.filter((doc) => {
+    if (doc.status === "paye" || doc.status === "annule" || doc.type !== "facture") return false;
+    if (!doc.due_date) return false;
+    return new Date(doc.due_date) < now;
+  });
+  const overdueAmount = overdueDocs.reduce((sum, d) => sum + d.total_ttc, 0);
+
+  const clientAmounts: Record<string, number> = {};
+  const clientInvCount: Record<string, number> = {};
+  monthlyDocs.forEach((doc) => {
+    clientAmounts[doc.client_id] = (clientAmounts[doc.client_id] || 0) + doc.total_ttc;
+    clientInvCount[doc.client_id] = (clientInvCount[doc.client_id] || 0) + 1;
+  });
+  const topClients = Object.entries(clientAmounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([id, amount]) => {
+      const c = clients.find((x) => x.id === id);
+      return {
+        name: c ? (c.company_name || `${c.first_name || ""} ${c.last_name || ""}`.trim()) : "—",
+        amount,
+        invoices: clientInvCount[id] || 0,
+      };
+    });
+  const overdueList = overdueDocs.slice(0, 6).map((doc) => {
+    const c = clients.find((x) => x.id === doc.client_id);
+    const clientName = c ? (c.company_name || `${c.first_name || ""} ${c.last_name || ""}`.trim()) : "—";
+    const days = Math.floor((now.getTime() - new Date(doc.due_date!).getTime()) / (1000 * 60 * 60 * 24));
+    return { number: doc.number, client: clientName, amount: doc.total_ttc, days };
+  });
+
+  async function generateMonthlyReport() {
+    setLoadingMonthly(true);
+    setMsgMonthly("");
+    try {
+      const recoveryRate = monthlyDocs.length > 0 ? Math.round((paidDocs.length / monthlyDocs.length) * 100) : 0;
+      const topClientsStr = topClients.map((c) => `${c.name} (${c.amount.toFixed(0)}€)`).join(", ");
+
+      const avoirsAmount = monthlyAvoirs.reduce((sum, d) => sum + d.total_ttc, 0);
+      const devisPipeline = monthlyDevis.reduce((sum, d) => sum + d.total_ttc, 0);
+
+      const aiRes = await fetch("/api/ai-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "monthly",
+          data: {
+            period: periodLabel,
+            totalCA: totalCA.toFixed(0),
+            invoiceCount: monthlyDocs.length,
+            recoveryRate,
+            newClients: 0,
+            overdueAmount: overdueAmount.toFixed(0),
+            topClients: topClientsStr || "Aucun",
+            devisCount: monthlyDevis.length,
+            devisPipeline: devisPipeline.toFixed(0),
+            avoirsCount: monthlyAvoirs.length,
+            avoirsAmount: avoirsAmount.toFixed(0),
+          },
+        }),
+      });
+      const aiData = await aiRes.json();
+
+      const reportData: MonthlyReportData = {
+        period: periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1),
+        companyName: userName,
+        totalCA,
+        invoiceCount: monthlyDocs.length,
+        paidCount: paidDocs.length,
+        overdueAmount,
+        newClients: 0,
+        topClients,
+        overdueList,
+        ai: aiData,
+      };
+
+      const { pdf: renderPdf } = await import("@react-pdf/renderer");
+      const { MonthlyReportDocument } = await import("@/components/pdf/report-pdf");
+      const blob = await renderPdf(<MonthlyReportDocument data={reportData} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `rapport-mensuel-${periodLabel.replace(" ", "-")}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setMsgMonthly("Rapport généré et téléchargé ✓");
+    } catch (e: unknown) {
+      setMsgMonthly((e as Error).message || "Erreur lors de la génération");
+    } finally {
+      setLoadingMonthly(false);
+    }
+  }
+
+  async function generateClientReport() {
+    if (!selectedClientId) return;
+    setLoadingClient(true);
+    setMsgClient("");
+    try {
+      const client = clients.find((c) => c.id === selectedClientId);
+      if (!client) throw new Error("Client introuvable");
+
+      // Tous les documents du client (pour l'historique)
+      const allClientDocs = documents.filter((d) => d.client_id === selectedClientId);
+      // Uniquement les factures pour les stats financières
+      const clientDocs = allClientDocs.filter((d) => d.type === "facture");
+      const clientPaid = clientDocs.filter((d) => d.status === "paye");
+      const totalInvoiced = clientDocs.reduce((sum, d) => sum + d.total_ttc, 0);
+      const totalPaid = clientPaid.reduce((sum, d) => sum + d.total_ttc, 0);
+      const pendingAmount = totalInvoiced - totalPaid;
+      const avgPaymentDays = 30;
+      const clientName = client.company_name || `${client.first_name || ""} ${client.last_name || ""}`.trim();
+      const lastInvoiceDate = clientDocs.length > 0
+        ? new Date(clientDocs[clientDocs.length - 1].date).toLocaleDateString("fr-FR")
+        : "—";
+
+      const aiRes = await fetch("/api/ai-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "client",
+          data: {
+            clientName,
+            totalInvoiced: totalInvoiced.toFixed(0),
+            totalPaid: totalPaid.toFixed(0),
+            pendingAmount: pendingAmount.toFixed(0),
+            invoiceCount: clientDocs.length,
+            avgPaymentDays,
+            lastInvoiceDate,
+          },
+        }),
+      });
+      const aiData = await aiRes.json();
+
+      const reportData: ClientReportData = {
+        companyName: userName,
+        client: {
+          name: clientName,
+          email: client.email || undefined,
+          phone: client.phone || undefined,
+          city: client.city || undefined,
+          siret: client.siret || undefined,
+          sector: client.sector || undefined,
+          type: client.type === "professionnel" ? "Professionnel" : "Particulier",
+        },
+        stats: { totalInvoiced, totalPaid, pendingAmount, invoiceCount: clientDocs.length, avgPaymentDays },
+        // Historique complet : tous types de documents triés par date
+        documents: allClientDocs
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .slice(0, 10)
+          .map((doc) => ({
+            number: doc.number,
+            date: new Date(doc.date).toLocaleDateString("fr-FR"),
+            type: doc.type,
+            status: doc.status,
+            amount: doc.total_ttc,
+          })),
+        ai: aiData,
+      };
+
+      const { pdf: renderPdf } = await import("@react-pdf/renderer");
+      const { ClientReportDocument } = await import("@/components/pdf/report-pdf");
+      const blob = await renderPdf(<ClientReportDocument data={reportData} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `rapport-client-${clientName.replace(/\s+/g, "-")}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      // Préparer l'envoi email
+      setEmailPending({ blob, clientEmail: client.email, clientName, reportTitle: `Rapport client — ${clientName}` });
+      setMsgClient("Rapport généré et téléchargé ✓");
+    } catch (e: unknown) {
+      setMsgClient((e as Error).message || "Erreur lors de la génération");
+    } finally {
+      setLoadingClient(false);
+    }
+  }
+
+  function openMailto() {
+    if (!emailPending) return;
+    const subject = encodeURIComponent(emailPending.reportTitle);
+    const body = encodeURIComponent(
+      `Bonjour ${emailPending.clientName},\n\nVeuillez trouver ci-joint votre rapport financier.\n\n⚠️ Merci d'attacher le PDF téléchargé à cet email.\n\nCordialement,\n${userName}`
+    );
+    const mailto = `mailto:${emailPending.clientEmail || ""}?subject=${subject}&body=${body}`;
+    window.open(mailto);
+    setMsgEmail("Client mail ouvert — pensez à joindre le PDF manuellement");
+  }
+
+  async function sendReportByEmail() {
+    if (!emailPending) return;
+    if (!emailPending.clientEmail) {
+      setMsgEmail("Ce client n'a pas d'email renseigné dans sa fiche");
+      return;
+    }
+    setSendingEmail(true);
+    setMsgEmail("");
+    try {
+      const resendKey = localStorage.getItem("resend_key") || "";
+      const base64 = await blobToBase64(emailPending.blob);
+
+      const res = await fetch("/api/send-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pdfBase64: base64,
+          clientEmail: emailPending.clientEmail,
+          clientName: emailPending.clientName,
+          reportTitle: emailPending.reportTitle,
+          companyName: userName,
+          resendKey,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.error === "CLE_RESEND_MANQUANTE") {
+          // Fallback mailto
+          openMailto();
+          return;
+        }
+        throw new Error(data.error);
+      }
+      setMsgEmail(`Email envoyé à ${emailPending.clientEmail} ✓`);
+    } catch (e: unknown) {
+      setMsgEmail((e as Error).message || "Erreur envoi email");
+    } finally {
+      setSendingEmail(false);
+    }
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Rapport mensuel */}
+      <div>
+        <h4 className="text-xs font-sans font-semibold text-atlantic-200/50 uppercase tracking-wider mb-3">Rapport mensuel</h4>
+        <div className="p-4 rounded-xl bg-atlantic-800/20 border border-gold-400/10 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gold-400/10 flex items-center justify-center flex-shrink-0">
+              <BarChart3 className="w-4 h-4 text-gold-400" />
+            </div>
+            <div>
+              <p className="text-sm font-sans font-medium text-white">
+                {periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1)}
+              </p>
+              <p className="text-xs font-sans text-atlantic-200/40">
+                {monthlyDocs.length} facture{monthlyDocs.length > 1 ? "s" : ""} · {paidDocs.length} payée{paidDocs.length > 1 ? "s" : ""}
+                {overdueAmount > 0 ? ` · ${overdueAmount.toFixed(0)} € en retard` : " · Aucun impayé"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <PremiumButton
+              size="sm"
+              onClick={generateMonthlyReport}
+              loading={loadingMonthly}
+              icon={<Download className="w-4 h-4" />}
+            >
+              Générer rapport mensuel PDF
+            </PremiumButton>
+            {msgMonthly && (
+              <p className={cn("text-xs font-sans", msgMonthly.includes("✓") ? "text-emerald-400" : "text-red-400")}>
+                {msgMonthly}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Rapport par client */}
+      <div>
+        <h4 className="text-xs font-sans font-semibold text-atlantic-200/50 uppercase tracking-wider mb-3">Rapport par client</h4>
+        <div className="p-4 rounded-xl bg-atlantic-800/20 border border-gold-400/10 space-y-3">
+          <div className="flex items-start gap-3 mb-1">
+            <div className="w-8 h-8 rounded-lg bg-gold-400/10 flex items-center justify-center flex-shrink-0">
+              <User className="w-4 h-4 text-gold-400" />
+            </div>
+            <div>
+              <p className="text-sm font-sans font-medium text-white">Rapport individuel client</p>
+              <p className="text-xs font-sans text-atlantic-200/40">Analyse financière complète avec scoring IA</p>
+            </div>
+          </div>
+          <select
+            value={selectedClientId}
+            onChange={(e) => setSelectedClientId(e.target.value)}
+            className="premium-input w-full text-sm"
+          >
+            <option value="">— Sélectionnez un client —</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.company_name || `${c.first_name || ""} ${c.last_name || ""}`.trim()}
+              </option>
+            ))}
+          </select>
+          {selectedClientId && (() => {
+            const clientDocs = documents.filter((d) => d.client_id === selectedClientId && d.type === "facture");
+            const total = clientDocs.reduce((sum, d) => sum + d.total_ttc, 0);
+            return (
+              <p className="text-xs font-sans text-atlantic-200/40">
+                {clientDocs.length} facture{clientDocs.length > 1 ? "s" : ""} · {total.toFixed(0)} € facturé au total
+              </p>
+            );
+          })()}
+          <div className="flex items-center gap-3 flex-wrap">
+            <PremiumButton
+              size="sm"
+              onClick={generateClientReport}
+              loading={loadingClient}
+              disabled={!selectedClientId}
+              icon={<Download className="w-4 h-4" />}
+            >
+              Générer rapport client PDF
+            </PremiumButton>
+            {msgClient && (
+              <p className={cn("text-xs font-sans", msgClient.includes("✓") ? "text-emerald-400" : "text-red-400")}>
+                {msgClient}
+              </p>
+            )}
+          </div>
+
+          {/* Actions post-génération */}
+          {emailPending && (
+            <div className="mt-3 pt-3 border-t border-gold-400/10 space-y-3">
+              <p className="text-xs font-sans font-semibold text-atlantic-200/40 uppercase tracking-wider">Actions</p>
+              <div className="flex items-center gap-2 flex-wrap">
+
+                {/* Prévisualiser */}
+                <button
+                  onClick={() => {
+                    const url = URL.createObjectURL(emailPending.blob);
+                    window.open(url, "_blank");
+                    setTimeout(() => URL.revokeObjectURL(url), 10000);
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-sans font-medium text-atlantic-200/70 hover:text-white px-3 py-2 rounded-lg bg-atlantic-800/30 border border-gold-400/10 hover:border-gold-400/30 transition-colors"
+                >
+                  <Eye className="w-3.5 h-3.5 text-gold-400" />
+                  Prévisualiser
+                </button>
+
+                {/* Re-télécharger */}
+                <button
+                  onClick={() => {
+                    const url = URL.createObjectURL(emailPending.blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `${emailPending.reportTitle.replace(/[^a-z0-9 -]/gi, "").trim()}.pdf`;
+                    a.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 5000);
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-sans font-medium text-atlantic-200/70 hover:text-white px-3 py-2 rounded-lg bg-atlantic-800/30 border border-gold-400/10 hover:border-gold-400/30 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5 text-gold-400" />
+                  Télécharger
+                </button>
+
+                {/* Envoyer par email */}
+                <button
+                  onClick={emailPending.clientEmail ? sendReportByEmail : openMailto}
+                  disabled={sendingEmail}
+                  className="flex items-center gap-1.5 text-xs font-sans font-medium text-gold-400 hover:text-gold-300 px-3 py-2 rounded-lg bg-gold-400/10 border border-gold-400/20 hover:border-gold-400/40 transition-colors disabled:opacity-50"
+                >
+                  <ArrowRight className="w-3.5 h-3.5" />
+                  {sendingEmail
+                    ? "Envoi..."
+                    : emailPending.clientEmail
+                    ? `Envoyer à ${emailPending.clientEmail}`
+                    : "Ouvrir mon client mail"}
+                </button>
+              </div>
+
+              {!emailPending.clientEmail && (
+                <p className="text-xs font-sans text-atlantic-200/30">
+                  Aucun email sur cette fiche client — ajoutez-en un pour l&apos;envoi automatique
+                </p>
+              )}
+
+              {msgEmail && (
+                <p className={cn("text-xs font-sans", msgEmail.includes("✓") ? "text-emerald-400" : "text-amber-400")}>
+                  {msgEmail}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── PAGE PRINCIPALE ───────────────────────────────────────────────────────────
 export default function ParametresPage() {
   const [active, setActive] = useState("compte");
@@ -1040,6 +1483,7 @@ export default function ParametresPage() {
     notifications: <SectionNotifications />,
     integrations:  <SectionIntegrations />,
     donnees:       <SectionDonnees />,
+    rapports:      <SectionRapports />,
   };
 
   return (

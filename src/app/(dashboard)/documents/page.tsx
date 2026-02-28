@@ -9,7 +9,8 @@ import { PageTransition } from "@/components/premium/page-transition";
 import {
   FileText, Plus, Search, Edit2, Trash2, Eye, Send, Check, X,
   ChevronRight, Receipt, FileCheck, ArrowRight, ShieldCheck, AlertTriangle,
-  CheckCircle2, XCircle, MessageSquare, Clock, Printer, Download,
+  CheckCircle2, XCircle, MessageSquare, Clock, Printer, Download, Brain,
+  Truck, RotateCcw, ChevronDown,
 } from "lucide-react";
 import {
   verifyDocument, addDocumentValidation, getDocumentValidations,
@@ -35,7 +36,15 @@ import { calculateLineTotals as calcLine } from "@/lib/validators";
 import type { Document as Doc, DocumentLine, Client, Product } from "@/types/database";
 
 type ViewMode = "list" | "create" | "detail";
-type DocTypeFilter = "all" | "facture" | "devis" | "avoir";
+type DocTypeFilter = "all" | "facture" | "devis" | "avoir" | "bon_livraison";
+type DocType = "facture" | "devis" | "avoir" | "bon_livraison";
+
+const DOC_TYPE_CONFIG: Record<DocType, { label: string; labelNew: string; short: string; color: string; dueDateLabel: string; showDueDate: boolean; showPayé: boolean }> = {
+  facture:       { label: "Facture",           labelNew: "Nouvelle facture",           short: "FAC", color: "bg-emerald-400/10 text-emerald-400", dueDateLabel: "Date d'échéance",    showDueDate: true,  showPayé: true  },
+  devis:         { label: "Devis",             labelNew: "Nouveau devis",              short: "DEV", color: "bg-blue-400/10 text-blue-400",       dueDateLabel: "Validité jusqu'au",   showDueDate: true,  showPayé: false },
+  avoir:         { label: "Avoir",             labelNew: "Nouvel avoir",               short: "AVO", color: "bg-amber-400/10 text-amber-400",     dueDateLabel: "Date de référence",   showDueDate: false, showPayé: false },
+  bon_livraison: { label: "Bon de livraison",  labelNew: "Nouveau bon de livraison",   short: "BL",  color: "bg-violet-400/10 text-violet-400",   dueDateLabel: "Date de livraison",   showDueDate: true,  showPayé: false },
+};
 
 interface LineForm {
   id?: string;
@@ -76,7 +85,9 @@ export default function DocumentsPage() {
   const [selectedLines, setSelectedLines] = useState<DocumentLine[]>([]);
 
   // Create form state
-  const [docType, setDocType] = useState<"facture" | "devis">("facture");
+  const [docType, setDocType] = useState<DocType>("facture");
+  const [showTypeMenu, setShowTypeMenu] = useState(false);
+  const [aiNotesLoading, setAiNotesLoading] = useState(false);
   const [clientId, setClientId] = useState("");
   const [docDate, setDocDate] = useState(new Date().toISOString().split("T")[0]);
   const [dueDate, setDueDate] = useState("");
@@ -155,7 +166,25 @@ export default function DocumentsPage() {
     setLines(newLines);
   }
 
-  async function openCreate(type: "facture" | "devis") {
+  async function generateAINotes() {
+    setAiNotesLoading(true);
+    try {
+      const client = clients.find((c) => c.id === clientId);
+      const clientName = client ? (client.company_name || `${client.first_name || ""} ${client.last_name || ""}`.trim()) : "";
+      const lineDescriptions = lines.filter((l) => l.description).map((l) => l.description);
+      const res = await fetch("/api/ai-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ docType, clientName, lineDescriptions, docNumber: previewNumber }),
+      });
+      const data = await res.json();
+      if (data.notes) setNotes(data.notes);
+    } catch { /* ignore */ } finally {
+      setAiNotesLoading(false);
+    }
+  }
+
+  async function openCreate(type: DocType) {
     setDocType(type);
     setClientId("");
     setDocDate(new Date().toISOString().split("T")[0]);
@@ -290,9 +319,15 @@ export default function DocumentsPage() {
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
               <div className="flex items-center gap-3">
                 <div className="flex gap-1 p-1 rounded-lg bg-atlantic-800/30">
-                  {(["all", "facture", "devis", "avoir"] as const).map((t) => (
-                    <button key={t} onClick={() => setFilterType(t)} className={`px-3 py-1.5 rounded-md text-xs font-sans transition-all ${filterType === t ? "bg-gold-400/10 text-gold-400 border border-gold-400/20" : "text-atlantic-200/40 hover:text-white"}`}>
-                      {t === "all" ? "Tous" : t.charAt(0).toUpperCase() + t.slice(1) + "s"}
+                  {([
+                    { id: "all", label: "Tous" },
+                    { id: "facture", label: "Factures" },
+                    { id: "devis", label: "Devis" },
+                    { id: "avoir", label: "Avoirs" },
+                    { id: "bon_livraison", label: "BL" },
+                  ] as const).map((t) => (
+                    <button key={t.id} onClick={() => setFilterType(t.id)} className={`px-3 py-1.5 rounded-md text-xs font-sans transition-all ${filterType === t.id ? "bg-gold-400/10 text-gold-400 border border-gold-400/20" : "text-atlantic-200/40 hover:text-white"}`}>
+                      {t.label}
                     </button>
                   ))}
                 </div>
@@ -301,9 +336,36 @@ export default function DocumentsPage() {
                   <input type="text" placeholder="N° document..." value={search} onChange={(e) => setSearch(e.target.value)} className="premium-input pl-10 text-sm w-44" />
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <PremiumButton variant="outline" size="sm" icon={<FileCheck className="w-4 h-4" />} onClick={() => openCreate("devis")}>Devis</PremiumButton>
                 <PremiumButton size="sm" icon={<Receipt className="w-4 h-4" />} onClick={() => openCreate("facture")}>Facture</PremiumButton>
+                {/* Menu autres types */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowTypeMenu(!showTypeMenu)}
+                    className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-xs font-sans text-atlantic-200/50 hover:text-white bg-atlantic-800/30 border border-gold-400/10 hover:border-gold-400/20 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                  {showTypeMenu && (
+                    <div className="absolute right-0 top-full mt-1 z-20 bg-atlantic-900 border border-gold-400/20 rounded-xl shadow-xl overflow-hidden min-w-[180px]">
+                      {([
+                        { type: "avoir" as DocType, label: "Avoir", icon: RotateCcw },
+                        { type: "bon_livraison" as DocType, label: "Bon de livraison", icon: Truck },
+                      ]).map(({ type, label, icon: Icon }) => (
+                        <button
+                          key={type}
+                          onClick={() => { openCreate(type); setShowTypeMenu(false); }}
+                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-sans text-atlantic-200/70 hover:text-white hover:bg-atlantic-700/50 transition-colors"
+                        >
+                          <Icon className="w-4 h-4 text-gold-400/60" />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -323,8 +385,8 @@ export default function DocumentsPage() {
                   const st = STATUS_LABELS[doc.status] || STATUS_LABELS.brouillon;
                   return (
                     <div key={doc.id} onClick={() => openDetail(doc)} className="flex items-center gap-4 p-4 rounded-xl border border-gold-400/5 bg-atlantic-800/20 hover:border-gold-400/20 hover:bg-atlantic-800/30 transition-all cursor-pointer group">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-sans font-bold ${doc.type === "facture" ? "bg-emerald-400/10 text-emerald-400" : doc.type === "devis" ? "bg-blue-400/10 text-blue-400" : "bg-amber-400/10 text-amber-400"}`}>
-                        {doc.type === "facture" ? "FAC" : doc.type === "devis" ? "DEV" : "AVO"}
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-sans font-bold ${DOC_TYPE_CONFIG[doc.type as DocType]?.color || "bg-atlantic-400/10 text-atlantic-200"}`}>
+                        {DOC_TYPE_CONFIG[doc.type as DocType]?.short || doc.type.slice(0, 3).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-sans font-medium text-white">{doc.number}</p>
@@ -351,7 +413,7 @@ export default function DocumentsPage() {
                 <GlassCard hover={false}>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-display font-semibold">
-                      {docType === "facture" ? "Nouvelle facture" : "Nouveau devis"}
+                      {DOC_TYPE_CONFIG[docType]?.labelNew || "Nouveau document"}
                     </h3>
                     <span className="text-sm font-sans font-semibold text-gold-400">
                       {numberLoading ? "Génération..." : previewNumber}
@@ -370,7 +432,14 @@ export default function DocumentsPage() {
                       </select>
                     </div>
                     <PremiumInput label="Date" type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} />
-                    <PremiumInput label="Échéance" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                    {DOC_TYPE_CONFIG[docType]?.showDueDate && (
+                      <PremiumInput
+                        label={DOC_TYPE_CONFIG[docType]?.dueDateLabel || "Échéance"}
+                        type="date"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                      />
+                    )}
                     <PremiumInput label="Remise globale (%)" type="number" value={String(discountPercent)} onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)} />
                   </div>
                 </GlassCard>
@@ -414,8 +483,29 @@ export default function DocumentsPage() {
                 </GlassCard>
 
                 <div className="mt-4">
-                  <label className="block text-sm font-sans font-medium text-gold-300 mb-2">Notes / Conditions</label>
-                  <textarea placeholder="Conditions de paiement, mentions particulières..." value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="premium-input w-full resize-none" />
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-sans font-medium text-gold-300">Notes / Conditions</label>
+                    <button
+                      onClick={generateAINotes}
+                      disabled={aiNotesLoading}
+                      className="flex items-center gap-1.5 text-xs font-sans text-gold-400 hover:text-gold-300 px-2.5 py-1 rounded-lg bg-gold-400/10 hover:bg-gold-400/20 border border-gold-400/20 transition-colors disabled:opacity-50"
+                    >
+                      <Brain className="w-3.5 h-3.5" />
+                      {aiNotesLoading ? "Génération..." : "✦ IA"}
+                    </button>
+                  </div>
+                  <textarea
+                    placeholder={
+                      docType === "facture" ? "Conditions de paiement, pénalités de retard..." :
+                      docType === "devis" ? "Durée de validité, conditions d'acceptation..." :
+                      docType === "avoir" ? "Référence facture d'origine, motif de l'avoir..." :
+                      "Conditions de livraison, réserves..."
+                    }
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={3}
+                    className="premium-input w-full resize-none"
+                  />
                 </div>
               </div>
 
@@ -655,10 +745,20 @@ function DocumentDetail({ doc, lines, clients, getClientName, onBack, onUpdateSt
                   </PremiumButton>
                 )}
                 {doc.status === "valide" && (
-                  <PremiumButton size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => onUpdateStatus("envoye")}>Envoyer</PremiumButton>
+                  <PremiumButton size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => onUpdateStatus("envoye")}>
+                    {doc.type === "bon_livraison" ? "Livré" : "Envoyer"}
+                  </PremiumButton>
                 )}
-                {doc.status === "envoye" && (
+                {doc.status === "envoye" && doc.type === "facture" && (
                   <PremiumButton size="sm" icon={<Check className="w-3.5 h-3.5" />} onClick={() => onUpdateStatus("paye")}>Payé</PremiumButton>
+                )}
+                {doc.status === "envoye" && doc.type === "devis" && (
+                  <>
+                    <PremiumButton size="sm" icon={<Check className="w-3.5 h-3.5" />} onClick={() => onUpdateStatus("paye")}>Accepté</PremiumButton>
+                    <button onClick={() => onUpdateStatus("refuse")} className="px-3 py-1.5 rounded-lg text-xs font-sans bg-red-400/10 text-red-400 hover:bg-red-400/20 transition-colors">
+                      Refusé
+                    </button>
+                  </>
                 )}
                 <PremiumButton variant="outline" size="sm" icon={<Printer className="w-3.5 h-3.5" />} onClick={() => setShowPreview(!showPreview)}>
                   {showPreview ? "Données" : "Aperçu"}
