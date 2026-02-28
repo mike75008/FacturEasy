@@ -30,7 +30,8 @@
       "Bash(git -C \"C:/Users/hagbe/Downloads/facturation template universelle\" diff --stat)",
       "Bash(findstr:*)",
       "Bash(cmd:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "WebFetch(domain:www.pennylane.com)"
     ]
   }
 }
