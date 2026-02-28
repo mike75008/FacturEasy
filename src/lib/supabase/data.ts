@@ -155,6 +155,7 @@ export async function saveClient(client: Partial<Client>): Promise<Client> {
         country: client.country ?? "FR",
         siret: client.siret ?? null,
         tva_number: client.tva_number ?? null,
+        sector: client.sector ?? null,
         notes: client.notes ?? null,
         updated_at: new Date().toISOString(),
       })
@@ -186,6 +187,7 @@ export async function saveClient(client: Partial<Client>): Promise<Client> {
         country: client.country ?? "FR",
         siret: client.siret ?? null,
         tva_number: client.tva_number ?? null,
+        sector: client.sector ?? null,
         notes: client.notes ?? null,
       })
       .select()

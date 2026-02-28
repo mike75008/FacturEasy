@@ -456,18 +456,21 @@ function SectionIntegrations() {
 
 // ─── IMPORT WIZARD ────────────────────────────────────────────────────────────
 
-type WizardStep = "idle" | "parsing" | "analyzing" | "mapping" | "importing" | "done";
+type WizardStep = "idle" | "parsing" | "analyzing" | "mapping" | "pdf_records" | "importing" | "done";
 
 interface ParsedFile {
   headers: string[];
   rows: string[][];
   fileName: string;
+  isPDF?: boolean;
+  pdfText?: string;
 }
 
 interface AIMapping {
   entityType: "clients" | "products";
   confidence: number;
   mapping: Record<string, string | null>;
+  records?: Record<string, string>[]; // Pour PDF : enregistrements extraits directement
 }
 
 interface ImportResult {
@@ -489,6 +492,7 @@ const CLIENT_FIELD_OPTIONS = [
   { value: "country", label: "Pays" },
   { value: "siret", label: "SIRET" },
   { value: "tva_number", label: "N° TVA" },
+  { value: "sector", label: "Secteur / Domaine" },
   { value: "notes", label: "Notes" },
 ];
 
@@ -504,6 +508,26 @@ const PRODUCT_FIELD_OPTIONS = [
 
 async function parseFile(file: File): Promise<ParsedFile> {
   const ext = file.name.split(".").pop()?.toLowerCase();
+
+  if (ext === "pdf") {
+    const PDFJS = await import("pdfjs-dist");
+    PDFJS.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+    const buffer = await file.arrayBuffer();
+    const pdf = await PDFJS.getDocument({ data: buffer }).promise;
+    let fullText = "";
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items
+        .map((item: unknown) => {
+          const it = item as { str?: string };
+          return it.str ?? "";
+        })
+        .join(" ");
+      fullText += pageText + "\n";
+    }
+    return { headers: [], rows: [], fileName: file.name, isPDF: true, pdfText: fullText };
+  }
 
   if (ext === "json") {
     const text = await file.text();
@@ -551,63 +575,97 @@ function ImportWizard({ onComplete }: { onComplete: () => void }) {
       setParsed(data);
       setStep("analyzing");
 
-      // Appel à l'IA pour le mapping
-      const res = await fetch("/api/ai-import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          headers: data.headers,
-          sampleRows: data.rows.slice(0, 3),
-        }),
-      });
-      if (!res.ok) throw new Error("Erreur API");
-      const mapping: AIMapping = await res.json();
-      setAiMapping(mapping);
+      if (data.isPDF) {
+        // Flow PDF : extraction directe par l'IA
+        const res = await fetch("/api/ai-import-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: data.pdfText }),
+        });
+        if (!res.ok) throw new Error("Erreur API PDF");
+        const result: AIMapping = await res.json();
+        setAiMapping(result);
+        setStep("pdf_records");
+      } else {
+        // Flow Excel/CSV/JSON : mapping de colonnes
+        const res = await fetch("/api/ai-import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            headers: data.headers,
+            sampleRows: data.rows.slice(0, 3),
+          }),
+        });
+        if (!res.ok) throw new Error("Erreur API");
+        const mapping: AIMapping = await res.json();
+        setAiMapping(mapping);
 
-      // Initialiser le mapping utilisateur depuis l'IA
-      const initial: Record<string, string> = {};
-      data.headers.forEach((h) => {
-        initial[h] = mapping.mapping[h] ?? "";
-      });
-      setUserMapping(initial);
-      setStep("mapping");
+        const initial: Record<string, string> = {};
+        data.headers.forEach((h) => {
+          initial[h] = mapping.mapping[h] ?? "";
+        });
+        setUserMapping(initial);
+        setStep("mapping");
+      }
     } catch (e: unknown) {
       setError((e as Error).message || "Erreur lors de l'analyse");
       setStep("idle");
     }
   }
 
-  async function handleImport() {
+  async function handleImport(pdfRecords?: Record<string, string>[]) {
     if (!parsed || !aiMapping) return;
     setStep("importing");
     let imported = 0;
     let errors = 0;
 
-    for (const row of parsed.rows) {
-      if (row.every((cell) => !cell.trim())) continue; // skip lignes vides
-      try {
-        const record: Record<string, unknown> = {};
-        parsed.headers.forEach((header, i) => {
-          const target = userMapping[header];
-          if (target) record[target] = row[i] ?? "";
-        });
+    const records = pdfRecords ?? null;
 
-        if (aiMapping.entityType === "clients") {
-          // Convertir les champs numériques si besoin
-          await saveClient(record as Parameters<typeof saveClient>[0]);
-        } else {
-          if (record.unit_price) record.unit_price = parseFloat(String(record.unit_price)) || 0;
-          if (record.tva_rate) record.tva_rate = parseFloat(String(record.tva_rate)) || 20;
-          await saveProduct(record as Parameters<typeof saveProduct>[0]);
+    if (records) {
+      // Flow PDF : importer les enregistrements extraits par l'IA
+      for (const record of records) {
+        try {
+          const r: Record<string, unknown> = { ...record };
+          if (aiMapping.entityType === "clients") {
+            await saveClient(r as Parameters<typeof saveClient>[0]);
+          } else {
+            if (r.unit_price) r.unit_price = parseFloat(String(r.unit_price)) || 0;
+            if (r.tva_rate) r.tva_rate = parseFloat(String(r.tva_rate)) || 20;
+            await saveProduct(r as Parameters<typeof saveProduct>[0]);
+          }
+          imported++;
+        } catch {
+          errors++;
         }
-        imported++;
-      } catch {
-        errors++;
       }
+      setResult({ total: records.length, imported, errors });
+    } else {
+      // Flow Excel/CSV : importer via le mapping de colonnes
+      for (const row of parsed.rows) {
+        if (row.every((cell) => !cell.trim())) continue;
+        try {
+          const record: Record<string, unknown> = {};
+          parsed.headers.forEach((header, i) => {
+            const target = userMapping[header];
+            if (target) record[target] = row[i] ?? "";
+          });
+          if (aiMapping.entityType === "clients") {
+            await saveClient(record as Parameters<typeof saveClient>[0]);
+          } else {
+            if (record.unit_price) record.unit_price = parseFloat(String(record.unit_price)) || 0;
+            if (record.tva_rate) record.tva_rate = parseFloat(String(record.tva_rate)) || 20;
+            await saveProduct(record as Parameters<typeof saveProduct>[0]);
+          }
+          imported++;
+        } catch {
+          errors++;
+        }
+      }
+      setResult({ total: parsed.rows.length, imported, errors });
     }
 
-    setResult({ total: parsed.rows.length, imported, errors });
     setStep("done");
+    onComplete();
   }
 
   const fieldOptions = aiMapping?.entityType === "products" ? PRODUCT_FIELD_OPTIONS : CLIENT_FIELD_OPTIONS;
@@ -621,14 +679,14 @@ function ImportWizard({ onComplete }: { onComplete: () => void }) {
           </div>
           <div>
             <p className="text-sm font-sans font-medium text-white">Importer depuis un fichier</p>
-            <p className="text-xs font-sans text-atlantic-200/40">Excel (.xlsx, .xls), CSV, JSON — L&apos;IA détecte et mappe vos colonnes automatiquement</p>
+            <p className="text-xs font-sans text-atlantic-200/40">Excel (.xlsx, .xls), CSV, JSON, PDF — L&apos;IA détecte et structure vos données automatiquement</p>
           </div>
         </div>
         {error && <p className="text-xs font-sans text-red-400 mb-3">{error}</p>}
         <input
           ref={fileInputRef}
           type="file"
-          accept=".xlsx,.xls,.csv,.json"
+          accept=".xlsx,.xls,.csv,.json,.pdf"
           className="hidden"
           onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
         />
@@ -712,6 +770,59 @@ function ImportWizard({ onComplete }: { onComplete: () => void }) {
     );
   }
 
+  if (step === "pdf_records" && aiMapping?.records) {
+    const records = aiMapping.records;
+    const entityLabel = aiMapping.entityType === "clients" ? "clients" : "produits";
+    const previewFields = Object.keys(records[0] || {}).slice(0, 4);
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-gold-400/[0.06] border border-gold-400/20">
+          <Brain className="w-4 h-4 text-gold-400 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-sans font-medium text-white">
+              PDF analysé : <span className="text-gold-400">{records.length} {entityLabel} extraits</span>
+              <span className="text-atlantic-200/40 text-xs ml-2">({Math.round(aiMapping.confidence * 100)}% de confiance)</span>
+            </p>
+            <p className="text-xs font-sans text-atlantic-200/40">Vérifiez les données extraites avant d&apos;importer</p>
+          </div>
+          <button onClick={() => { setStep("idle"); setParsed(null); setAiMapping(null); }} className="text-atlantic-200/30 hover:text-white transition-colors">
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Aperçu des enregistrements */}
+        <div className="rounded-xl border border-gold-400/10 overflow-hidden">
+          <div className="grid bg-atlantic-800/40 border-b border-gold-400/10 px-3 py-2" style={{ gridTemplateColumns: `repeat(${previewFields.length}, 1fr)` }}>
+            {previewFields.map((f) => (
+              <p key={f} className="text-xs font-sans font-semibold text-gold-400/70 uppercase tracking-wider truncate">{f.replace(/_/g, " ")}</p>
+            ))}
+          </div>
+          {records.slice(0, 5).map((rec, i) => (
+            <div key={i} className="grid px-3 py-2 border-b border-gold-400/5 last:border-0 hover:bg-atlantic-800/20 transition-colors" style={{ gridTemplateColumns: `repeat(${previewFields.length}, 1fr)` }}>
+              {previewFields.map((f) => (
+                <p key={f} className="text-xs font-sans text-atlantic-200/70 truncate pr-2">{rec[f] || "—"}</p>
+              ))}
+            </div>
+          ))}
+          {records.length > 5 && (
+            <div className="px-3 py-2 text-center">
+              <p className="text-xs font-sans text-atlantic-200/30">+ {records.length - 5} autre{records.length - 5 > 1 ? "s" : ""} enregistrement{records.length - 5 > 1 ? "s" : ""}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <PremiumButton onClick={() => handleImport(records)} icon={<Check className="w-4 h-4" />}>
+            Importer {records.length} {entityLabel}
+          </PremiumButton>
+          <PremiumButton variant="ghost" onClick={() => { setStep("idle"); setParsed(null); setAiMapping(null); }}>
+            Annuler
+          </PremiumButton>
+        </div>
+      </div>
+    );
+  }
+
   if (step === "importing") {
     return (
       <div className="p-4 rounded-xl bg-atlantic-800/20 border border-gold-400/10">
@@ -750,7 +861,7 @@ function ImportWizard({ onComplete }: { onComplete: () => void }) {
             Certaines lignes n&apos;ont pas pu être importées (doublons ou données invalides)
           </div>
         )}
-        <PremiumButton variant="outline" size="sm" onClick={() => { setStep("idle"); setResult(null); onComplete(); }}>
+        <PremiumButton variant="outline" size="sm" onClick={() => { setStep("idle"); setResult(null); }}>
           Fermer
         </PremiumButton>
       </div>

@@ -234,6 +234,7 @@ export default function ClientsPage() {
                 <PremiumInput label="Adresse" placeholder="123 rue Example" value={editingClient.address || ""} onChange={(e) => updateField("address", e.target.value)} className="md:col-span-2" />
                 <PremiumInput label="Code postal" placeholder="75001" value={editingClient.postal_code || ""} onChange={(e) => updateField("postal_code", e.target.value)} />
                 <PremiumInput label="Ville" placeholder="Paris" value={editingClient.city || ""} onChange={(e) => updateField("city", e.target.value)} />
+                <PremiumInput label="Secteur / Domaine" placeholder="Digital, BTP, Santé..." value={editingClient.sector || ""} onChange={(e) => updateField("sector", e.target.value)} className="md:col-span-2" />
               </div>
 
               <div className="mt-4">
@@ -327,6 +328,9 @@ export default function ClientsPage() {
                   )}
                   {selectedClient.tva_number && (
                     <p className="text-sm font-sans text-atlantic-200/70">TVA : <span className="text-white font-mono">{selectedClient.tva_number}</span></p>
+                  )}
+                  {selectedClient.sector && (
+                    <p className="text-sm font-sans text-atlantic-200/70">Secteur : <span className="text-white">{selectedClient.sector}</span></p>
                   )}
                   {selectedClient.notes && (
                     <div>

@@ -5,7 +5,8 @@ export const runtime = "nodejs";
 
 const CLIENT_FIELDS = [
   "company_name", "first_name", "last_name", "email", "phone",
-  "address", "city", "postal_code", "country", "siret", "tva_number", "notes",
+  "address", "city", "postal_code", "country", "siret", "tva_number",
+  "sector", "notes",
 ];
 
 const PRODUCT_FIELDS = [
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
           `1. Le type d'entité : "clients" (carnets d'adresses, contacts, sociétés) ou "products" (catalogue, articles, services, tarifs)\n` +
           `2. La correspondance de chaque colonne source vers un champ FacturEasy (ou null si non pertinent)\n\n` +
           `Champs disponibles pour clients : ${CLIENT_FIELDS.join(", ")}\n` +
+          `(sector = secteur d'activité : informatique, bâtiment, santé, commerce, etc.)\n` +
           `Champs disponibles pour products : ${PRODUCT_FIELDS.join(", ")}\n\n` +
           `Réponds UNIQUEMENT avec ce JSON :\n` +
           `{\n` +

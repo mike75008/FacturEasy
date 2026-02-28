@@ -62,6 +62,7 @@ export interface Client {
   country: string;
   siret: string | null;
   tva_number: string | null;
+  sector: string | null;
   payment_behavior: "excellent" | "bon" | "moyen" | "mauvais" | null;
   notes: string | null;
   created_at: string;
