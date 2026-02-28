@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Topbar } from "@/components/dashboard/topbar";
 import { GlassCard } from "@/components/premium/glass-card";
 import { PremiumButton } from "@/components/premium/premium-button";
@@ -11,8 +11,13 @@ import { cn } from "@/lib/utils";
 import {
   User, CreditCard, Users, Plug, Database, Bell,
   Check, Eye, EyeOff, Download, Upload, AlertTriangle,
-  Crown, Zap, Shield, Key, Trash2,
+  Crown, Zap, Shield, Key, Trash2, Brain, FileSpreadsheet,
+  ArrowRight, RotateCcw, CheckCircle2, XCircle,
 } from "lucide-react";
+import {
+  saveClient,
+  saveProduct,
+} from "@/lib/supabase/data";
 
 const SECTIONS = [
   { id: "compte",        label: "Compte",        icon: User,       subtitle: "Email, mot de passe, sécurité" },
@@ -449,9 +454,320 @@ function SectionIntegrations() {
   );
 }
 
+// ─── IMPORT WIZARD ────────────────────────────────────────────────────────────
+
+type WizardStep = "idle" | "parsing" | "analyzing" | "mapping" | "importing" | "done";
+
+interface ParsedFile {
+  headers: string[];
+  rows: string[][];
+  fileName: string;
+}
+
+interface AIMapping {
+  entityType: "clients" | "products";
+  confidence: number;
+  mapping: Record<string, string | null>;
+}
+
+interface ImportResult {
+  total: number;
+  imported: number;
+  errors: number;
+}
+
+const CLIENT_FIELD_OPTIONS = [
+  { value: "", label: "— Ignorer —" },
+  { value: "company_name", label: "Nom entreprise" },
+  { value: "first_name", label: "Prénom" },
+  { value: "last_name", label: "Nom de famille" },
+  { value: "email", label: "Email" },
+  { value: "phone", label: "Téléphone" },
+  { value: "address", label: "Adresse" },
+  { value: "city", label: "Ville" },
+  { value: "postal_code", label: "Code postal" },
+  { value: "country", label: "Pays" },
+  { value: "siret", label: "SIRET" },
+  { value: "tva_number", label: "N° TVA" },
+  { value: "notes", label: "Notes" },
+];
+
+const PRODUCT_FIELD_OPTIONS = [
+  { value: "", label: "— Ignorer —" },
+  { value: "name", label: "Nom du produit/service" },
+  { value: "description", label: "Description" },
+  { value: "unit_price", label: "Prix unitaire HT (€)" },
+  { value: "unit", label: "Unité" },
+  { value: "tva_rate", label: "Taux TVA (%)" },
+  { value: "category", label: "Catégorie" },
+];
+
+async function parseFile(file: File): Promise<ParsedFile> {
+  const ext = file.name.split(".").pop()?.toLowerCase();
+
+  if (ext === "json") {
+    const text = await file.text();
+    const json = JSON.parse(text);
+    let rows: Record<string, unknown>[];
+    if (Array.isArray(json)) rows = json;
+    else if (json.clients) rows = json.clients;
+    else if (json.products) rows = json.products;
+    else rows = [json];
+    const headers = Object.keys(rows[0] || {});
+    return {
+      headers,
+      rows: rows.map((r) => headers.map((h) => String(r[h] ?? ""))),
+      fileName: file.name,
+    };
+  }
+
+  // xlsx gère Excel (.xlsx, .xls) ET CSV
+  const XLSX = await import("xlsx");
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const data = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
+  const headers = ((data[0] as unknown[]) || []).map((h) => String(h ?? ""));
+  const rows = data.slice(1).map((row) =>
+    (row as unknown[]).map((cell) => String(cell ?? ""))
+  );
+  return { headers, rows, fileName: file.name };
+}
+
+function ImportWizard({ onComplete }: { onComplete: () => void }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [step, setStep] = useState<WizardStep>("idle");
+  const [parsed, setParsed] = useState<ParsedFile | null>(null);
+  const [aiMapping, setAiMapping] = useState<AIMapping | null>(null);
+  const [userMapping, setUserMapping] = useState<Record<string, string>>({});
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [error, setError] = useState("");
+
+  async function handleFile(file: File) {
+    setError("");
+    setStep("parsing");
+    try {
+      const data = await parseFile(file);
+      setParsed(data);
+      setStep("analyzing");
+
+      // Appel à l'IA pour le mapping
+      const res = await fetch("/api/ai-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          headers: data.headers,
+          sampleRows: data.rows.slice(0, 3),
+        }),
+      });
+      if (!res.ok) throw new Error("Erreur API");
+      const mapping: AIMapping = await res.json();
+      setAiMapping(mapping);
+
+      // Initialiser le mapping utilisateur depuis l'IA
+      const initial: Record<string, string> = {};
+      data.headers.forEach((h) => {
+        initial[h] = mapping.mapping[h] ?? "";
+      });
+      setUserMapping(initial);
+      setStep("mapping");
+    } catch (e: unknown) {
+      setError((e as Error).message || "Erreur lors de l'analyse");
+      setStep("idle");
+    }
+  }
+
+  async function handleImport() {
+    if (!parsed || !aiMapping) return;
+    setStep("importing");
+    let imported = 0;
+    let errors = 0;
+
+    for (const row of parsed.rows) {
+      if (row.every((cell) => !cell.trim())) continue; // skip lignes vides
+      try {
+        const record: Record<string, unknown> = {};
+        parsed.headers.forEach((header, i) => {
+          const target = userMapping[header];
+          if (target) record[target] = row[i] ?? "";
+        });
+
+        if (aiMapping.entityType === "clients") {
+          // Convertir les champs numériques si besoin
+          await saveClient(record as Parameters<typeof saveClient>[0]);
+        } else {
+          if (record.unit_price) record.unit_price = parseFloat(String(record.unit_price)) || 0;
+          if (record.tva_rate) record.tva_rate = parseFloat(String(record.tva_rate)) || 20;
+          await saveProduct(record as Parameters<typeof saveProduct>[0]);
+        }
+        imported++;
+      } catch {
+        errors++;
+      }
+    }
+
+    setResult({ total: parsed.rows.length, imported, errors });
+    setStep("done");
+  }
+
+  const fieldOptions = aiMapping?.entityType === "products" ? PRODUCT_FIELD_OPTIONS : CLIENT_FIELD_OPTIONS;
+
+  if (step === "idle") {
+    return (
+      <div className="p-4 rounded-xl bg-atlantic-800/20 border border-gold-400/10 border-dashed">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-gold-400/10 flex items-center justify-center flex-shrink-0">
+            <FileSpreadsheet className="w-4 h-4 text-gold-400" />
+          </div>
+          <div>
+            <p className="text-sm font-sans font-medium text-white">Importer depuis un fichier</p>
+            <p className="text-xs font-sans text-atlantic-200/40">Excel (.xlsx, .xls), CSV, JSON — L&apos;IA détecte et mappe vos colonnes automatiquement</p>
+          </div>
+        </div>
+        {error && <p className="text-xs font-sans text-red-400 mb-3">{error}</p>}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls,.csv,.json"
+          className="hidden"
+          onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+        />
+        <PremiumButton size="sm" icon={<Upload className="w-3.5 h-3.5" />} onClick={() => fileInputRef.current?.click()}>
+          Choisir un fichier
+        </PremiumButton>
+      </div>
+    );
+  }
+
+  if (step === "parsing" || step === "analyzing") {
+    return (
+      <div className="p-4 rounded-xl bg-atlantic-800/20 border border-gold-400/10">
+        <div className="flex items-center gap-3">
+          <div className="w-6 h-6 rounded-full border-2 border-gold-400/30 border-t-gold-400 animate-spin" />
+          <p className="text-sm font-sans text-atlantic-200/60">
+            {step === "parsing" ? "Lecture du fichier..." : "Analyse IA en cours..."}
+          </p>
+        </div>
+        {step === "analyzing" && parsed && (
+          <p className="text-xs font-sans text-atlantic-200/30 mt-2 ml-9">
+            {parsed.rows.length} lignes détectées dans {parsed.fileName}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (step === "mapping" && parsed && aiMapping) {
+    const entityLabel = aiMapping.entityType === "clients" ? "clients" : "produits";
+    return (
+      <div className="space-y-4">
+        {/* En-tête résultat IA */}
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-gold-400/[0.06] border border-gold-400/20">
+          <Brain className="w-4 h-4 text-gold-400 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-sans font-medium text-white">
+              Fichier détecté : <span className="text-gold-400">{entityLabel}</span>
+              <span className="text-atlantic-200/40 text-xs ml-2">({parsed.rows.length} lignes • {Math.round(aiMapping.confidence * 100)}% de confiance)</span>
+            </p>
+            <p className="text-xs font-sans text-atlantic-200/40">Vérifiez et ajustez la correspondance des colonnes</p>
+          </div>
+          <button onClick={() => { setStep("idle"); setParsed(null); setAiMapping(null); }} className="text-atlantic-200/30 hover:text-white transition-colors">
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Table de mapping */}
+        <div className="space-y-2">
+          {parsed.headers.map((header) => (
+            <div key={header} className="flex items-center gap-3 p-3 rounded-lg bg-atlantic-800/20 border border-gold-400/5">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-sans font-medium text-white truncate">{header}</p>
+                <p className="text-xs font-sans text-atlantic-200/30 truncate">
+                  ex: {parsed.rows[0]?.[parsed.headers.indexOf(header)] || "—"}
+                </p>
+              </div>
+              <ArrowRight className="w-4 h-4 text-gold-400/30 flex-shrink-0" />
+              <select
+                value={userMapping[header] ?? ""}
+                onChange={(e) => setUserMapping((prev) => ({ ...prev, [header]: e.target.value }))}
+                className="premium-input text-sm w-52 flex-shrink-0"
+              >
+                {fieldOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2">
+          <PremiumButton onClick={handleImport} icon={<Check className="w-4 h-4" />}>
+            Importer {parsed.rows.length} lignes
+          </PremiumButton>
+          <PremiumButton variant="ghost" onClick={() => { setStep("idle"); setParsed(null); setAiMapping(null); }}>
+            Annuler
+          </PremiumButton>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "importing") {
+    return (
+      <div className="p-4 rounded-xl bg-atlantic-800/20 border border-gold-400/10">
+        <div className="flex items-center gap-3">
+          <div className="w-6 h-6 rounded-full border-2 border-gold-400/30 border-t-gold-400 animate-spin" />
+          <p className="text-sm font-sans text-atlantic-200/60">Import en cours...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "done" && result) {
+    return (
+      <div className="p-4 rounded-xl bg-atlantic-800/20 border border-gold-400/10 space-y-3">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+          <p className="text-sm font-sans font-semibold text-white">Import terminé</p>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="text-center p-3 rounded-lg bg-atlantic-800/30">
+            <p className="text-xl font-display font-bold text-white">{result.total}</p>
+            <p className="text-xs font-sans text-atlantic-200/40">Total</p>
+          </div>
+          <div className="text-center p-3 rounded-lg bg-emerald-400/5 border border-emerald-400/10">
+            <p className="text-xl font-display font-bold text-emerald-400">{result.imported}</p>
+            <p className="text-xs font-sans text-atlantic-200/40">Importés</p>
+          </div>
+          <div className="text-center p-3 rounded-lg bg-red-400/5 border border-red-400/10">
+            <p className="text-xl font-display font-bold text-red-400">{result.errors}</p>
+            <p className="text-xs font-sans text-atlantic-200/40">Erreurs</p>
+          </div>
+        </div>
+        {result.errors > 0 && (
+          <div className="flex items-center gap-2 text-xs font-sans text-red-400/70">
+            <XCircle className="w-3.5 h-3.5" />
+            Certaines lignes n&apos;ont pas pu être importées (doublons ou données invalides)
+          </div>
+        )}
+        <PremiumButton variant="outline" size="sm" onClick={() => { setStep("idle"); setResult(null); onComplete(); }}>
+          Fermer
+        </PremiumButton>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 // ─── DONNÉES ───────────────────────────────────────────────────────────────────
 function SectionDonnees() {
-  const { documents, clients, products } = useAppContext();
+  const { documents, clients, products, refreshClients, refreshProducts } = useAppContext();
+
+  function handleImportComplete() {
+    refreshClients();
+    refreshProducts();
+  }
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -539,15 +855,7 @@ function SectionDonnees() {
       {/* Import */}
       <div>
         <h4 className="text-xs font-sans font-semibold text-atlantic-200/50 uppercase tracking-wider mb-3">Importer</h4>
-        <div className="p-4 rounded-xl bg-atlantic-800/20 border border-gold-400/10 border-dashed">
-          <p className="text-sm font-sans text-atlantic-200/50 mb-3">
-            Importez vos données depuis un fichier CSV ou JSON
-          </p>
-          <PremiumButton variant="outline" size="sm" icon={<Upload className="w-3.5 h-3.5" />} disabled>
-            Choisir un fichier
-          </PremiumButton>
-          <p className="text-xs font-sans text-atlantic-200/30 mt-2">Formats acceptés : .csv, .json — Disponible prochainement</p>
-        </div>
+        <ImportWizard onComplete={handleImportComplete} />
       </div>
 
       {/* Zone de danger */}
