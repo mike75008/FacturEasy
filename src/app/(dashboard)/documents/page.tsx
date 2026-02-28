@@ -46,6 +46,89 @@ const DOC_TYPE_CONFIG: Record<DocType, { label: string; labelNew: string; short:
   bon_livraison: { label: "Bon de livraison",  labelNew: "Nouveau bon de livraison",   short: "BL",  color: "bg-violet-400/10 text-violet-400",   dueDateLabel: "Date de livraison",   showDueDate: true,  showPayé: false },
 };
 
+// ─── SECTEURS MÉTIER ──────────────────────────────────────────────────────────
+
+type SectorGroup = "legal" | "health" | "architecture" | "btp" | "b2b";
+
+interface SectorField {
+  key: string;
+  label: string;
+  placeholder?: string;
+  suffix?: string;
+  type?: "text" | "select";
+  options?: string[];
+}
+
+const SECTOR_FIELDS: Record<SectorGroup, { label: string; color: string; fields: SectorField[] }> = {
+  legal: {
+    label: "⚖️ Profession juridique",
+    color: "border-blue-400/20 bg-blue-400/[0.03]",
+    fields: [
+      { key: "dossier",     label: "Référence dossier",     placeholder: "Ex : DOS-2024-001" },
+      { key: "juridiction", label: "Juridiction / Tribunal", placeholder: "Ex : TGI Paris, Cour d'appel..." },
+      { key: "mission",     label: "Nature de la mission",   placeholder: "Ex : Rédaction contrat, consultation..." },
+      { key: "tva_regime",  label: "Régime TVA", type: "select", options: ["TVA 20%", "Franchise en base de TVA (art. 293 B CGI)"] },
+    ],
+  },
+  health: {
+    label: "🏥 Profession de santé",
+    color: "border-emerald-400/20 bg-emerald-400/[0.03]",
+    fields: [
+      { key: "rpps",      label: "N° RPPS / ADELI",       placeholder: "Ex : 10012345678" },
+      { key: "acte",      label: "Nature de l'acte / soin", placeholder: "Ex : Consultation, Séance de kinésithérapie..." },
+      { key: "tva_note",  label: "Mention TVA",            placeholder: "Exonération TVA — Art. 261-4-1° CGI" },
+    ],
+  },
+  architecture: {
+    label: "🏛️ Architecture / Bureau d'études",
+    color: "border-amber-400/20 bg-amber-400/[0.03]",
+    fields: [
+      { key: "dossier", label: "N° de dossier / permis",  placeholder: "Ex : PA-075-2024-001" },
+      { key: "phase",   label: "Phase de mission", type: "select", options: ["ESQ — Esquisse", "APS — Avant-Projet Sommaire", "APD — Avant-Projet Définitif", "PRO — Projet", "DCE — Dossier Consultation Entreprises", "ACT — Assistance Contrats Travaux", "DET — Direction Exécution Travaux", "AOR — Assistance Opérations Réception"] },
+      { key: "chantier", label: "Référence chantier",     placeholder: "Ex : Réhabilitation 12 rue des Arts" },
+      { key: "moa",      label: "Maître d'ouvrage",       placeholder: "Nom du maître d'ouvrage" },
+    ],
+  },
+  btp: {
+    label: "🔧 BTP / Artisan",
+    color: "border-orange-400/20 bg-orange-400/[0.03]",
+    fields: [
+      { key: "marche",   label: "N° de marché / chantier", placeholder: "Ex : MRC-2024-042" },
+      { key: "adresse_chantier", label: "Adresse du chantier", placeholder: "Ex : 15 rue des Artisans, 75001 Paris" },
+      { key: "avancement", label: "% d'avancement",        placeholder: "Ex : 65", suffix: "%" },
+      { key: "retenue",    label: "Retenue de garantie",   placeholder: "Ex : 5", suffix: "%" },
+    ],
+  },
+  b2b: {
+    label: "📦 Commerce B2B",
+    color: "border-violet-400/20 bg-violet-400/[0.03]",
+    fields: [
+      { key: "ref_commande", label: "Réf. commande client",    placeholder: "Ex : BC-2024-0123" },
+      { key: "livraison",    label: "Conditions de livraison", placeholder: "Ex : DDP Paris, franco de port..." },
+      { key: "delai",        label: "Délai de livraison",      placeholder: "Ex : 5 jours ouvrés" },
+    ],
+  },
+};
+
+function detectSectorGroup(sector: string | null | undefined): SectorGroup | null {
+  if (!sector) return null;
+  const s = sector.toLowerCase();
+  if (/avocat|notaire|juriste|huissier|juridique|barreau|clerc|greffier/.test(s)) return "legal";
+  if (/médecin|docteur|chirurg|infirm|kiné|ostéo|dentiste|santé|psycho|pharmacien|sage.femme|orthophon/.test(s)) return "health";
+  if (/architecte|urbaniste|bureau.d.étude|ingénieur.struct|maître.d.œuvre|géomètre/.test(s)) return "architecture";
+  if (/électricien|plombier|maçon|charpentier|menuisier|peintre|carreleur|couvreur|bâtiment|travaux|btp|artisan|chauffagiste|serrurier|vitrier|terrassier/.test(s)) return "btp";
+  if (/commerce|distribution|grossiste|fournisseur|négoce|import|export|revendeur|détaillant/.test(s)) return "b2b";
+  return null;
+}
+
+function compileSectorNotes(group: SectorGroup, values: Record<string, string>): string {
+  const config = SECTOR_FIELDS[group];
+  const lines = config.fields
+    .filter((f) => values[f.key]?.trim())
+    .map((f) => `${f.label} : ${values[f.key]}${f.suffix || ""}`);
+  return lines.length > 0 ? `— ${config.label} —\n${lines.join("\n")}` : "";
+}
+
 interface LineForm {
   id?: string;
   description: string;
@@ -89,6 +172,8 @@ export default function DocumentsPage() {
   const [showTypeMenu, setShowTypeMenu] = useState(false);
   const [aiNotesLoading, setAiNotesLoading] = useState(false);
   const [clientId, setClientId] = useState("");
+  const [detectedSector, setDetectedSector] = useState<SectorGroup | null>(null);
+  const [sectorValues, setSectorValues] = useState<Record<string, string>>({});
   const [docDate, setDocDate] = useState(new Date().toISOString().split("T")[0]);
   const [dueDate, setDueDate] = useState("");
   const [notes, setNotes] = useState("");
@@ -129,6 +214,14 @@ export default function DocumentsPage() {
       discount: Math.round(discountAmt * 100) / 100,
     };
   }, [lines, discountPercent]);
+
+  // Détection secteur dès qu'un client est sélectionné
+  useEffect(() => {
+    const client = clients.find((c) => c.id === clientId);
+    const group = detectSectorGroup(client?.sector);
+    setDetectedSector(group);
+    setSectorValues({});
+  }, [clientId, clients]);
 
   function getClientName(clientIdVal: string): string {
     const c = clients.find((cl) => cl.id === clientIdVal);
@@ -187,6 +280,8 @@ export default function DocumentsPage() {
   async function openCreate(type: DocType) {
     setDocType(type);
     setClientId("");
+    setDetectedSector(null);
+    setSectorValues({});
     setDocDate(new Date().toISOString().split("T")[0]);
     setDueDate("");
     setNotes("");
@@ -207,6 +302,30 @@ export default function DocumentsPage() {
     }
   }
 
+  function openEdit(doc: Doc, docLines: DocumentLine[]) {
+    setDocType(doc.type as DocType);
+    setClientId(doc.client_id);
+    setDetectedSector(null);
+    setSectorValues({});
+    setDocDate(doc.date);
+    setDueDate(doc.due_date || "");
+    setNotes(doc.notes || "");
+    setDiscountPercent(doc.discount_percent || 0);
+    setLines(docLines.length > 0 ? docLines.map((l) => ({
+      id: l.id,
+      description: l.description,
+      quantity: l.quantity,
+      unit: l.unit,
+      unit_price: l.unit_price,
+      tva_rate: l.tva_rate,
+      discount_percent: l.discount_percent || 0,
+      product_id: l.product_id || null,
+    })) : [emptyLine()]);
+    setEditingDocId(doc.id);
+    setPreviewNumber(doc.number);
+    setView("create");
+  }
+
   async function handleSaveDocument() {
     if (!clientId) { alert("Sélectionnez un client"); return; }
     if (lines.every((l) => !l.description)) { alert("Ajoutez au moins une ligne"); return; }
@@ -222,6 +341,15 @@ export default function DocumentsPage() {
         number = previewNumber || await generateDocumentNumberDB(docType);
       }
 
+      // Compiler les champs secteur dans les notes
+      let finalNotes = notes;
+      if (detectedSector) {
+        const sectorBlock = compileSectorNotes(detectedSector, sectorValues);
+        if (sectorBlock) {
+          finalNotes = sectorBlock + (notes ? "\n\n" + notes : "");
+        }
+      }
+
       const docPayload = {
         id: editingDocId || undefined,
         client_id: clientId,
@@ -234,7 +362,7 @@ export default function DocumentsPage() {
         total_ttc: totals.ttc,
         discount_percent: discountPercent,
         discount_amount: totals.discount,
-        notes: notes || null,
+        notes: finalNotes || null,
         status: "brouillon" as const,
       };
 
@@ -482,6 +610,55 @@ export default function DocumentsPage() {
                   </div>
                 </GlassCard>
 
+                {/* ─── Champs secteur dynamiques ─── */}
+                {detectedSector && (
+                  <GlassCard hover={false} className={`!border ${SECTOR_FIELDS[detectedSector].color}`}>
+                    <div className="flex items-center gap-2 mb-4">
+                      <Brain className="w-4 h-4 text-gold-400" />
+                      <p className="text-sm font-sans font-semibold text-white">
+                        {SECTOR_FIELDS[detectedSector].label}
+                      </p>
+                      <span className="text-xs font-sans text-atlantic-200/40 ml-auto">Champs détectés automatiquement</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {SECTOR_FIELDS[detectedSector].fields.map((field) => (
+                        <div key={field.key}>
+                          <label className="block text-xs font-sans font-medium text-atlantic-200/60 mb-1.5">
+                            {field.label}
+                          </label>
+                          {field.type === "select" ? (
+                            <select
+                              value={sectorValues[field.key] || ""}
+                              onChange={(e) => setSectorValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                              className="premium-input w-full text-sm"
+                            >
+                              <option value="">— Sélectionner —</option>
+                              {field.options?.map((opt) => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <div className="relative">
+                              <input
+                                type="text"
+                                placeholder={field.placeholder}
+                                value={sectorValues[field.key] || ""}
+                                onChange={(e) => setSectorValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                                className="premium-input w-full text-sm"
+                              />
+                              {field.suffix && (
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-sans text-atlantic-200/40">
+                                  {field.suffix}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </GlassCard>
+                )}
+
                 <div className="mt-4">
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-sm font-sans font-medium text-gold-300">Notes / Conditions</label>
@@ -559,6 +736,7 @@ export default function DocumentsPage() {
             onUpdateStatus={(s) => { updateStatus(selectedDoc, s); }}
             onDelete={() => handleDeleteDoc(selectedDoc.id)}
             onRefresh={refreshDocuments}
+            onEdit={() => openEdit(selectedDoc, selectedLines)}
           />
         )}
       </div>
@@ -671,7 +849,7 @@ function InvoicePreview({ doc, lines, clientName }: { doc: Doc; lines: DocumentL
 // Document Detail with Validation N+1
 // ═══════════════════════════════════════════
 
-function DocumentDetail({ doc, lines, clients, getClientName, onBack, onUpdateStatus, onDelete, onRefresh }: {
+function DocumentDetail({ doc, lines, clients, getClientName, onBack, onUpdateStatus, onDelete, onRefresh, onEdit }: {
   doc: Doc;
   lines: DocumentLine[];
   clients: Client[];
@@ -680,6 +858,7 @@ function DocumentDetail({ doc, lines, clients, getClientName, onBack, onUpdateSt
   onUpdateStatus: (status: string) => void;
   onDelete: () => void;
   onRefresh: () => void;
+  onEdit: () => void;
 }) {
   const [verification, setVerification] = useState<VerificationResult | null>(null);
   const [validations, setValidations] = useState<LocalValidation[]>([]);
@@ -760,6 +939,9 @@ function DocumentDetail({ doc, lines, clients, getClientName, onBack, onUpdateSt
                     </button>
                   </>
                 )}
+                <PremiumButton variant="outline" size="sm" icon={<Edit2 className="w-3.5 h-3.5" />} onClick={onEdit}>
+                  Modifier
+                </PremiumButton>
                 <PremiumButton variant="outline" size="sm" icon={<Printer className="w-3.5 h-3.5" />} onClick={() => setShowPreview(!showPreview)}>
                   {showPreview ? "Données" : "Aperçu"}
                 </PremiumButton>

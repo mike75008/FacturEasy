@@ -41,6 +41,12 @@ function SectionCompte() {
   const [savingPw, setSavingPw] = useState(false);
   const [msgName, setMsgName] = useState("");
   const [msgPw, setMsgPw] = useState("");
+  const [profileType, setProfileType] = useState<"particulier" | "professionnel">("professionnel");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("profile_type");
+    if (stored === "particulier" || stored === "professionnel") setProfileType(stored);
+  }, []);
 
   const initials = userName
     .split(" ")
@@ -93,6 +99,27 @@ function SectionCompte() {
 
   return (
     <div className="space-y-8">
+      {/* Toggle type de profil */}
+      <div className="flex gap-1 p-1 rounded-xl bg-atlantic-800/30 w-fit">
+        {([
+          { id: "particulier" as const, label: "Particulier" },
+          { id: "professionnel" as const, label: "Professionnel" },
+        ]).map((t) => (
+          <button
+            key={t.id}
+            onClick={() => { setProfileType(t.id); localStorage.setItem("profile_type", t.id); }}
+            className={cn(
+              "px-4 py-1.5 rounded-lg text-sm font-sans transition-colors",
+              profileType === t.id
+                ? "bg-gold-400/10 text-gold-400 border border-gold-400/20"
+                : "text-atlantic-200/40 hover:text-white"
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {/* Profil */}
       <div>
         <h4 className="text-xs font-sans font-semibold text-atlantic-200/50 uppercase tracking-wider mb-4">Profil</h4>
