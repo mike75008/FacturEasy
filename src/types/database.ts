@@ -2,7 +2,7 @@
 
 export type UserRole = "owner" | "admin" | "accountant" | "viewer";
 export type ClientType = "particulier" | "professionnel";
-export type DocumentType = "facture" | "devis" | "avoir" | "bon_livraison";
+export type DocumentType = "facture" | "devis" | "avoir" | "bon_livraison" | "contrat" | "ordre_mission" | "fiche_intervention" | "recu";
 export type DocumentStatus = "brouillon" | "valide" | "envoye" | "paye" | "annule" | "refuse";
 export type ReminderChannel = "email" | "sms" | "appel";
 export type ReminderPriority = "low" | "medium" | "high" | "critical";

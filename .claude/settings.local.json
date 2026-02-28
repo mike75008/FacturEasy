@@ -29,7 +29,8 @@
       "Bash(npm run build:*)",
       "Bash(git -C \"C:/Users/hagbe/Downloads/facturation template universelle\" diff --stat)",
       "Bash(findstr:*)",
-      "Bash(cmd:*)"
+      "Bash(cmd:*)",
+      "Bash(ls:*)"
     ]
   }
 }

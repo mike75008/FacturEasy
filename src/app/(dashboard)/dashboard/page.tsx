@@ -297,7 +297,7 @@ export default function DashboardPage() {
             title="Analyse IA du tableau de bord"
           >
             <Brain className="w-4 h-4" />
-            <span className="hidden sm:inline">Analyser</span>
+            <span className="hidden sm:inline">Analyse IA</span>
           </button>
         }
       />

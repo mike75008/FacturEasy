@@ -776,10 +776,14 @@ export async function generateDocumentNumber(type: string): Promise<string> {
   if (seqError) throw new Error(seqError.message);
 
   const prefix =
-    type === "facture" ? "FAC" :
-    type === "devis"   ? "DEV" :
-    type === "avoir"   ? "AVO" :
-    type === "bon_livraison" ? "BL" :
+    type === "facture"            ? "FAC" :
+    type === "devis"              ? "DEV" :
+    type === "avoir"              ? "AVO" :
+    type === "bon_livraison"      ? "BL"  :
+    type === "contrat"            ? "CTR" :
+    type === "ordre_mission"      ? "OM"  :
+    type === "fiche_intervention" ? "FI"  :
+    type === "recu"               ? "RCU" :
     type.slice(0, 3).toUpperCase();
 
   if (!seq) {

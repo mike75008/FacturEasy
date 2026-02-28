@@ -36,14 +36,20 @@ import { calculateLineTotals as calcLine } from "@/lib/validators";
 import type { Document as Doc, DocumentLine, Client, Product } from "@/types/database";
 
 type ViewMode = "list" | "create" | "detail";
-type DocTypeFilter = "all" | "facture" | "devis" | "avoir" | "bon_livraison";
-type DocType = "facture" | "devis" | "avoir" | "bon_livraison";
+type DocTypeFilter = "all" | "facture" | "devis" | "avoir" | "bon_livraison" | "autres";
+type DocType = "facture" | "devis" | "avoir" | "bon_livraison" | "contrat" | "ordre_mission" | "fiche_intervention" | "recu";
+
+const AUTRES_TYPES: DocType[] = ["contrat", "ordre_mission", "fiche_intervention", "recu"];
 
 const DOC_TYPE_CONFIG: Record<DocType, { label: string; labelNew: string; short: string; color: string; dueDateLabel: string; showDueDate: boolean; showPayé: boolean }> = {
-  facture:       { label: "Facture",           labelNew: "Nouvelle facture",           short: "FAC", color: "bg-emerald-400/10 text-emerald-400", dueDateLabel: "Date d'échéance",    showDueDate: true,  showPayé: true  },
-  devis:         { label: "Devis",             labelNew: "Nouveau devis",              short: "DEV", color: "bg-blue-400/10 text-blue-400",       dueDateLabel: "Validité jusqu'au",   showDueDate: true,  showPayé: false },
-  avoir:         { label: "Avoir",             labelNew: "Nouvel avoir",               short: "AVO", color: "bg-amber-400/10 text-amber-400",     dueDateLabel: "Date de référence",   showDueDate: false, showPayé: false },
-  bon_livraison: { label: "Bon de livraison",  labelNew: "Nouveau bon de livraison",   short: "BL",  color: "bg-violet-400/10 text-violet-400",   dueDateLabel: "Date de livraison",   showDueDate: true,  showPayé: false },
+  facture:             { label: "Facture",               labelNew: "Nouvelle facture",               short: "FAC", color: "bg-emerald-400/10 text-emerald-400",  dueDateLabel: "Date d'échéance",     showDueDate: true,  showPayé: true  },
+  devis:               { label: "Devis",                 labelNew: "Nouveau devis",                  short: "DEV", color: "bg-blue-400/10 text-blue-400",         dueDateLabel: "Validité jusqu'au",    showDueDate: true,  showPayé: false },
+  avoir:               { label: "Avoir",                 labelNew: "Nouvel avoir",                   short: "AVO", color: "bg-amber-400/10 text-amber-400",       dueDateLabel: "Date de référence",    showDueDate: false, showPayé: false },
+  bon_livraison:       { label: "Bon de livraison",      labelNew: "Nouveau bon de livraison",       short: "BL",  color: "bg-violet-400/10 text-violet-400",     dueDateLabel: "Date de livraison",    showDueDate: true,  showPayé: false },
+  contrat:             { label: "Contrat",               labelNew: "Nouveau contrat",                short: "CTR", color: "bg-cyan-400/10 text-cyan-400",         dueDateLabel: "Date de fin",          showDueDate: true,  showPayé: false },
+  ordre_mission:       { label: "Ordre de mission",      labelNew: "Nouvel ordre de mission",        short: "OM",  color: "bg-indigo-400/10 text-indigo-400",     dueDateLabel: "Date de fin mission",  showDueDate: true,  showPayé: false },
+  fiche_intervention:  { label: "Fiche d'intervention",  labelNew: "Nouvelle fiche d'intervention",  short: "FI",  color: "bg-orange-400/10 text-orange-400",     dueDateLabel: "Date d'intervention",  showDueDate: true,  showPayé: false },
+  recu:                { label: "Reçu",                  labelNew: "Nouveau reçu",                   short: "RCU", color: "bg-teal-400/10 text-teal-400",         dueDateLabel: "Date de règlement",    showDueDate: false, showPayé: false },
 };
 
 // ─── SECTEURS MÉTIER ──────────────────────────────────────────────────────────
@@ -188,7 +194,8 @@ export default function DocumentsPage() {
   const filtered = useMemo(() => {
     return documents
       .filter((d) => {
-        const matchType = filterType === "all" || d.type === filterType;
+        const matchType = filterType === "all"
+          || (filterType === "autres" ? AUTRES_TYPES.includes(d.type as DocType) : d.type === filterType);
         const matchSearch = !search || d.number.toLowerCase().includes(search.toLowerCase());
         return matchType && matchSearch;
       })
@@ -409,11 +416,38 @@ export default function DocumentsPage() {
     setView("detail");
   }
 
+  async function generateRecu(facture: Doc) {
+    try {
+      const recuNumber = await generateDocumentNumberDB("recu");
+      const recu = await saveDocumentDB({
+        client_id: facture.client_id,
+        type: "recu",
+        number: recuNumber,
+        date: new Date().toISOString().split("T")[0],
+        due_date: null,
+        total_ht: facture.total_ht,
+        total_tva: facture.total_tva,
+        total_ttc: facture.total_ttc,
+        discount_percent: facture.discount_percent,
+        discount_amount: facture.discount_amount,
+        notes: `Reçu pour règlement de la facture ${facture.number}`,
+        status: "valide",
+      });
+      const lines = await getDocumentLinesDB(facture.id);
+      if (lines.length > 0) {
+        await replaceDocumentLinesDB(recu.id, lines.map((l) => ({ ...l, id: undefined })));
+      }
+    } catch { /* génération silencieuse */ }
+  }
+
   async function updateStatus(doc: Doc, status: string) {
     const updated = { ...doc, status: status as Doc["status"] };
     if (selectedDoc?.id === doc.id) setSelectedDoc(updated);
     try {
       await saveDocumentDB(updated);
+      if (doc.type === "facture" && status === "paye") {
+        await generateRecu(doc);
+      }
       await refreshDocuments();
     } catch {
       saveDocumentLS(updated);
@@ -453,6 +487,7 @@ export default function DocumentsPage() {
                     { id: "devis", label: "Devis" },
                     { id: "avoir", label: "Avoirs" },
                     { id: "bon_livraison", label: "BL" },
+                    { id: "autres", label: "Autres" },
                   ] as const).map((t) => (
                     <button key={t.id} onClick={() => setFilterType(t.id)} className={`px-3 py-1.5 rounded-md text-xs font-sans transition-all ${filterType === t.id ? "bg-gold-400/10 text-gold-400 border border-gold-400/20" : "text-atlantic-200/40 hover:text-white"}`}>
                       {t.label}
@@ -481,6 +516,10 @@ export default function DocumentsPage() {
                       {([
                         { type: "avoir" as DocType, label: "Avoir", icon: RotateCcw },
                         { type: "bon_livraison" as DocType, label: "Bon de livraison", icon: Truck },
+                        { type: "contrat" as DocType, label: "Contrat", icon: FileText },
+                        { type: "ordre_mission" as DocType, label: "Ordre de mission", icon: FileCheck },
+                        { type: "fiche_intervention" as DocType, label: "Fiche d'intervention", icon: Truck },
+                        { type: "recu" as DocType, label: "Reçu manuel", icon: Receipt },
                       ]).map(({ type, label, icon: Icon }) => (
                         <button
                           key={type}
@@ -923,9 +962,12 @@ function DocumentDetail({ doc, lines, clients, getClientName, onBack, onUpdateSt
                     Demander validation
                   </PremiumButton>
                 )}
-                {doc.status === "valide" && (
+                {doc.status === "valide" && doc.type !== "recu" && (
                   <PremiumButton size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => onUpdateStatus("envoye")}>
-                    {doc.type === "bon_livraison" ? "Livré" : "Envoyer"}
+                    {doc.type === "bon_livraison" ? "Livré" :
+                     doc.type === "contrat" ? "Envoyer pour signature" :
+                     doc.type === "fiche_intervention" ? "Démarrer" :
+                     "Envoyer"}
                   </PremiumButton>
                 )}
                 {doc.status === "envoye" && doc.type === "facture" && (
@@ -938,6 +980,25 @@ function DocumentDetail({ doc, lines, clients, getClientName, onBack, onUpdateSt
                       Refusé
                     </button>
                   </>
+                )}
+                {doc.status === "envoye" && doc.type === "contrat" && (
+                  <>
+                    <PremiumButton size="sm" icon={<Check className="w-3.5 h-3.5" />} onClick={() => onUpdateStatus("paye")}>Signé</PremiumButton>
+                    <button onClick={() => onUpdateStatus("refuse")} className="px-3 py-1.5 rounded-lg text-xs font-sans bg-red-400/10 text-red-400 hover:bg-red-400/20 transition-colors">
+                      Refusé
+                    </button>
+                  </>
+                )}
+                {doc.status === "envoye" && doc.type === "ordre_mission" && (
+                  <>
+                    <PremiumButton size="sm" icon={<Check className="w-3.5 h-3.5" />} onClick={() => onUpdateStatus("paye")}>Accepté</PremiumButton>
+                    <button onClick={() => onUpdateStatus("refuse")} className="px-3 py-1.5 rounded-lg text-xs font-sans bg-red-400/10 text-red-400 hover:bg-red-400/20 transition-colors">
+                      Refusé
+                    </button>
+                  </>
+                )}
+                {doc.status === "envoye" && doc.type === "fiche_intervention" && (
+                  <PremiumButton size="sm" icon={<Check className="w-3.5 h-3.5" />} onClick={() => onUpdateStatus("paye")}>Terminée</PremiumButton>
                 )}
                 <PremiumButton variant="outline" size="sm" icon={<Edit2 className="w-3.5 h-3.5" />} onClick={onEdit}>
                   Modifier

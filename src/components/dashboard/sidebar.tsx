@@ -6,9 +6,11 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Package, FileText, Settings, Bell,
-  Activity, Brain, ChevronLeft, ChevronRight, LogOut, Sparkles,
+  Activity, Brain, ChevronLeft, LogOut,
   Menu, X, UserCircle,
 } from "lucide-react";
+import { useAppContext } from "@/lib/context/app-context";
+import { computeInsights, filterUnseen } from "@/lib/insights";
 
 const navItems = [
   { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
@@ -17,6 +19,7 @@ const navItems = [
   { href: "/products", label: "Produits", icon: Package },
   { href: "/reminders", label: "Relances", icon: Bell },
   { href: "/monitoring", label: "Monitoring", icon: Activity },
+  { href: "/assistant", label: "Assistant IA", icon: Brain },
   { href: "/settings", label: "Profil", icon: UserCircle },
   { href: "/parametres", label: "Paramètres", icon: Settings },
 ];
@@ -29,6 +32,15 @@ export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { documents, clients } = useAppContext();
+  const [insightCount, setInsightCount] = useState(0);
+
+  useEffect(() => {
+    if (!documents.length && !clients.length) return;
+    const all = computeInsights(documents, clients);
+    const unseen = filterUnseen(all);
+    setInsightCount(unseen.length);
+  }, [documents, clients]);
 
   // Refs pour mesurer les positions réelles des items
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -161,12 +173,19 @@ export function Sidebar() {
                     }}
                   />
 
-                  <item.icon
-                    className={cn(
-                      "w-5 h-5 flex-shrink-0 transition-colors duration-200",
-                      isActive ? "text-gold-400" : ""
+                  <div className="relative flex-shrink-0">
+                    <item.icon
+                      className={cn(
+                        "w-5 h-5 transition-colors duration-200",
+                        isActive ? "text-gold-400" : ""
+                      )}
+                    />
+                    {item.href === "/assistant" && insightCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-400 flex items-center justify-center text-[8px] font-bold text-white animate-pulse">
+                        {insightCount > 9 ? "9+" : insightCount}
+                      </span>
                     )}
-                  />
+                  </div>
 
                   <span
                     className="text-sm font-sans font-medium whitespace-nowrap overflow-hidden"
@@ -177,6 +196,11 @@ export function Sidebar() {
                     }}
                   >
                     {item.label}
+                    {item.href === "/assistant" && insightCount > 0 && (showLabels || isMobile) && (
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-400/20 text-red-300">
+                        {insightCount} alerte{insightCount > 1 ? "s" : ""}
+                      </span>
+                    )}
                   </span>
                 </div>
               </Link>
