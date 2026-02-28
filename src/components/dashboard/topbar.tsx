@@ -11,9 +11,10 @@ interface TopbarProps {
   title: string;
   subtitle?: string;
   extra?: React.ReactNode;
+  rightExtra?: React.ReactNode;
 }
 
-export function Topbar({ title, subtitle, extra }: TopbarProps) {
+export function Topbar({ title, subtitle, extra, rightExtra }: TopbarProps) {
   const router = useRouter();
   const { userName, userEmail, notifications } = useAppContext();
   const [showMenu, setShowMenu] = useState(false);
@@ -114,6 +115,7 @@ export function Topbar({ title, subtitle, extra }: TopbarProps) {
       )}
 
       <div className="flex items-center gap-2">
+        {rightExtra}
         <button
           onClick={() => (window as unknown as Record<string, unknown>).__openSearch?.()}
           className="p-2.5 rounded-xl text-atlantic-200/40 hover:text-gold-400 hover:bg-gold-400/10 transition-all duration-200"

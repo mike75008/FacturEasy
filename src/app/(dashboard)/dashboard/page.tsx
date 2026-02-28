@@ -9,6 +9,7 @@ import {
   FileText, Users, TrendingUp, AlertTriangle, Clock, ArrowUpRight,
   Sparkles, BarChart3, CheckCircle2, XCircle, Package, Bell,
   Award, Shield, Crown, Zap, Trophy, Rocket, Star,
+  Brain, X, RefreshCw,
 } from "lucide-react";
 import { getUserGamification } from "@/lib/local-storage";
 import { useAppContext } from "@/lib/context/app-context";
@@ -31,6 +32,9 @@ export default function DashboardPage() {
   const [gamification] = useState(() => getUserGamification());
   const [chartAnimated, setChartAnimated] = useState(false);
   const [roiIndex, setRoiIndex] = useState(0);
+  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<Record<string, unknown> | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
     if (!loading) {
@@ -136,6 +140,47 @@ export default function DashboardPage() {
       { label: "Santé globale", value: santeScore, display: `${santeScore}%`, detail: "Score composite", score: santeScore },
     ];
   }, [documents, stats]);
+
+  async function generateAIAnalysis() {
+    setAiLoading(true);
+    try {
+      const res = await fetch("/api/ai-dashboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stats: {
+            totalCA: stats.totalCA,
+            pendingTotal: stats.pendingTotal,
+            overdueTotal: stats.overdueTotal,
+            invoiceCount: stats.invoiceCount,
+            overdueCount: stats.overdueCount,
+            paymentRate: stats.paymentRate,
+            clientCount: stats.clientCount,
+            productCount: stats.productCount,
+            quoteCount: stats.quoteCount,
+            quoteConversion: stats.quoteConversion,
+            sentReminders: stats.sentReminders,
+            reminderCount: stats.reminderCount,
+            roiTaux: roiMetrics[0].score,
+            roiRecouvrement: roiMetrics[1].score,
+            roiDelai: roiMetrics[2].value,
+            roiSante: roiMetrics[3].score,
+          },
+          gamification: {
+            level: gamification.level,
+            points: gamification.points,
+            nextLevelPoints: gamification.nextLevelPoints,
+            earnedBadges: gamification.badges.filter((b) => b.earned).length,
+            totalBadges: gamification.badges.length,
+          },
+        }),
+      });
+      const data = await res.json();
+      setAiAnalysis(data);
+    } catch { /* ignore */ } finally {
+      setAiLoading(false);
+    }
+  }
 
   function getClientName(clientId: string): string {
     const c = clientsList.find((cl) => cl.id === clientId);
@@ -244,6 +289,16 @@ export default function DashboardPage() {
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-[10px] font-sans text-atlantic-200/40">temps réel</span>
           </div>
+        }
+        rightExtra={
+          <button
+            onClick={() => { setShowAIPanel(true); if (!aiAnalysis) generateAIAnalysis(); }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-sans font-medium text-gold-400 bg-gold-400/10 border border-gold-400/20 hover:bg-gold-400/20 hover:border-gold-400/40 transition-all"
+            title="Analyse IA du tableau de bord"
+          >
+            <Brain className="w-4 h-4" />
+            <span className="hidden sm:inline">Analyser</span>
+          </button>
         }
       />
 
@@ -678,6 +733,179 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
+      {/* ═══ PANNEAU IA ═══ */}
+      {showAIPanel && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAIPanel(false)} />
+          <div className="relative w-[500px] max-w-[95vw] h-full bg-atlantic-900/98 border-l border-gold-400/15 flex flex-col shadow-2xl overflow-hidden">
+
+            {/* En-tête */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gold-400/10 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <Brain className="w-5 h-5 text-gold-400" />
+                <h2 className="text-base font-display font-semibold text-white">Analyse IA</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => generateAIAnalysis()}
+                  disabled={aiLoading}
+                  className="flex items-center gap-1.5 text-xs font-sans text-atlantic-200/50 hover:text-gold-400 px-2.5 py-1.5 rounded-lg hover:bg-gold-400/10 transition-colors disabled:opacity-40"
+                  title="Rafraîchir l'analyse"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${aiLoading ? "animate-spin" : ""}`} />
+                  Rafraîchir
+                </button>
+                <button onClick={() => setShowAIPanel(false)} className="p-1.5 rounded-lg text-atlantic-200/40 hover:text-white hover:bg-atlantic-700/50 transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Contenu scrollable */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+              {aiLoading && (
+                <div className="flex flex-col items-center justify-center py-20 gap-4">
+                  <div className="w-8 h-8 border-2 border-gold-400/30 border-t-gold-400 rounded-full animate-spin" />
+                  <p className="text-sm font-sans text-atlantic-200/40">Analyse de votre tableau de bord en cours...</p>
+                </div>
+              )}
+
+              {!aiLoading && !aiAnalysis && (
+                <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+                  <Brain className="w-12 h-12 text-gold-400/20" />
+                  <p className="text-sm font-sans text-atlantic-200/40">Cliquez sur Rafraîchir pour lancer l&apos;analyse</p>
+                </div>
+              )}
+
+              {!aiLoading && aiAnalysis && (() => {
+                const a = aiAnalysis as {
+                  synthesis?: string;
+                  kpis?: { ca?: string; pending?: string; clients?: string; paymentRate?: string };
+                  roi?: { tauxPaiement?: string; recouvrement?: string; delai?: string; sante?: string };
+                  performances?: string;
+                  apercu?: string;
+                  evolution?: string;
+                  gamification?: string;
+                  suggestions?: string[];
+                  alert?: string | null;
+                };
+                return (
+                  <>
+                    {/* Alerte critique */}
+                    {a.alert && (
+                      <div className="flex items-start gap-3 p-4 rounded-xl bg-red-400/[0.07] border border-red-400/20">
+                        <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                        <p className="text-sm font-sans text-red-300 leading-relaxed">{a.alert}</p>
+                      </div>
+                    )}
+
+                    {/* Synthèse globale */}
+                    <div className="p-4 rounded-xl bg-gold-400/[0.05] border border-gold-400/15">
+                      <p className="text-[10px] font-sans font-semibold text-gold-400/70 uppercase tracking-wider mb-2">Vue d&apos;ensemble</p>
+                      <p className="text-sm font-sans text-atlantic-200/80 leading-relaxed">{a.synthesis}</p>
+                    </div>
+
+                    {/* KPIs */}
+                    <div>
+                      <p className="text-[10px] font-sans font-semibold text-atlantic-200/40 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <TrendingUp className="w-3.5 h-3.5" /> Indicateurs clés
+                      </p>
+                      <div className="space-y-3">
+                        {[
+                          { key: "ca", label: `Chiffre d'affaires — ${stats.totalCA.toFixed(0)} €`, color: "text-emerald-400", text: a.kpis?.ca },
+                          { key: "pending", label: `En attente — ${stats.pendingTotal.toFixed(0)} €`, color: "text-amber-400", text: a.kpis?.pending },
+                          { key: "clients", label: `Clients actifs — ${stats.clientCount}`, color: "text-blue-400", text: a.kpis?.clients },
+                          { key: "paymentRate", label: `Taux de paiement — ${stats.paymentRate.toFixed(1)}%`, color: "text-violet-400", text: a.kpis?.paymentRate },
+                        ].map((item) => (
+                          <div key={item.key} className="p-3 rounded-lg bg-atlantic-800/30 border border-gold-400/5">
+                            <p className={`text-xs font-sans font-semibold mb-1.5 ${item.color}`}>{item.label}</p>
+                            <p className="text-xs font-sans text-atlantic-200/65 leading-relaxed">{item.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* ROI */}
+                    <div>
+                      <p className="text-[10px] font-sans font-semibold text-atlantic-200/40 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <Sparkles className="w-3.5 h-3.5" /> ROI FacturEasy — 4 indicateurs
+                      </p>
+                      <div className="space-y-3">
+                        {[
+                          { label: `Taux de paiement — ${roiMetrics[0].score}%`, text: a.roi?.tauxPaiement, score: roiMetrics[0].score },
+                          { label: `Recouvrement — ${roiMetrics[1].score}%`, text: a.roi?.recouvrement, score: roiMetrics[1].score },
+                          { label: `Délai moyen — ${roiMetrics[2].value} j`, text: a.roi?.delai, score: roiMetrics[2].score },
+                          { label: `Santé globale — ${roiMetrics[3].score}%`, text: a.roi?.sante, score: roiMetrics[3].score },
+                        ].map((item, i) => {
+                          const c = item.score >= 80 ? "#34d399" : item.score >= 60 ? "#d4af37" : item.score >= 40 ? "#f59e0b" : "#ef4444";
+                          return (
+                            <div key={i} className="p-3 rounded-lg bg-atlantic-800/30 border border-gold-400/5">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <p className="text-xs font-sans font-semibold text-white">{item.label}</p>
+                                <div className="w-16 h-1.5 rounded-full bg-atlantic-700/50 overflow-hidden">
+                                  <div className="h-full rounded-full" style={{ width: `${item.score}%`, backgroundColor: c }} />
+                                </div>
+                              </div>
+                              <p className="text-xs font-sans text-atlantic-200/65 leading-relaxed">{item.text}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Graphiques */}
+                    <div>
+                      <p className="text-[10px] font-sans font-semibold text-atlantic-200/40 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <BarChart3 className="w-3.5 h-3.5" /> Graphiques
+                      </p>
+                      <div className="space-y-3">
+                        {[
+                          { label: "Bloc Performances (barres)", text: a.performances },
+                          { label: "Aperçu (graphique en anneau)", text: a.apercu },
+                          { label: "Évolution du CA (12 mois)", text: a.evolution },
+                        ].map((item, i) => (
+                          <div key={i} className="p-3 rounded-lg bg-atlantic-800/30 border border-gold-400/5">
+                            <p className="text-xs font-sans font-semibold text-gold-400/80 mb-1.5">{item.label}</p>
+                            <p className="text-xs font-sans text-atlantic-200/65 leading-relaxed">{item.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Gamification */}
+                    <div>
+                      <p className="text-[10px] font-sans font-semibold text-atlantic-200/40 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <Award className="w-3.5 h-3.5" /> Progression & Gamification
+                      </p>
+                      <div className="p-3 rounded-lg bg-atlantic-800/30 border border-gold-400/5">
+                        <p className="text-xs font-sans text-atlantic-200/65 leading-relaxed">{a.gamification}</p>
+                      </div>
+                    </div>
+
+                    {/* Suggestions */}
+                    {a.suggestions && a.suggestions.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-sans font-semibold text-atlantic-200/40 uppercase tracking-wider mb-3 flex items-center gap-2">
+                          <Zap className="w-3.5 h-3.5 text-gold-400" /> Actions recommandées
+                        </p>
+                        <div className="space-y-2">
+                          {a.suggestions.map((s, i) => (
+                            <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-gold-400/[0.05] border border-gold-400/10">
+                              <span className="w-5 h-5 rounded-full bg-gold-400/20 text-gold-400 flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">{i + 1}</span>
+                              <p className="text-xs font-sans text-atlantic-200/75 leading-relaxed">{s}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </PageTransition>
   );
 }
