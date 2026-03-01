@@ -2,7 +2,18 @@
 // Calcule les "pensées" financières à partir des données réelles.
 // Logique pure, pas d'appel IA. Résultats toujours ancrés en euros.
 
-import type { Document, Client } from "@/types/database";
+import type { Document, Client, Organization, Depense, DeclarationTVA } from "@/types/database";
+
+const MOIS_FR = [
+  "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
+];
+
+export interface InsightOptions {
+  org?: Organization | null;
+  depenses?: Depense[];
+  declarations?: DeclarationTVA[];
+}
 
 export type InsightColor = "red" | "orange" | "yellow" | "blue" | "green";
 
@@ -21,7 +32,7 @@ function fmt(n: number): string {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 }
 
-export function computeInsights(documents: Document[], clients: Client[]): Insight[] {
+export function computeInsights(documents: Document[], clients: Client[], options?: InsightOptions): Insight[] {
   const insights: Insight[] = [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -297,6 +308,143 @@ export function computeInsights(documents: Document[], clients: Client[]): Insig
         detail: `Ton panier moyen est passé de ${fmt(prevAvg)} à ${fmt(recentAvg)} sur les 3 derniers mois. Tes clients achètent plus. C'est le moment d'aller chercher de nouveaux clients avec la même proposition de valeur — tu sais que ça fonctionne.`,
         action: "Comment capitaliser sur cette hausse du panier moyen ?",
         euros: (recentAvg - prevAvg) * recent3MonthsInvoices.length,
+      });
+    }
+  }
+
+  // ── Insights comptables (TVA / franchise) ─────────────────────────────────
+  const regime = options?.org?.regime_tva ?? null;
+  const declarations = options?.declarations ?? [];
+  const depenses = options?.depenses ?? [];
+  const now = new Date();
+
+  if (regime === "reel_mensuel") {
+    const prevMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+    const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+    const deadline = new Date(now.getFullYear(), now.getMonth(), 20);
+    const daysLeft = Math.round((deadline.getTime() - now.getTime()) / 86400000);
+    const alreadyDone = declarations.some((d) => d.annee === prevYear && d.mois === prevMonth + 1);
+
+    if (!alreadyDone) {
+      const periodPaid = documents.filter((d) => {
+        if (d.type !== "facture" || d.status !== "paye") return false;
+        const dt = d.paid_at ? new Date(d.paid_at) : new Date(d.date);
+        return dt.getFullYear() === prevYear && dt.getMonth() === prevMonth;
+      });
+      const periodAvoir = documents.filter((d) => {
+        if (d.type !== "avoir" || d.status !== "paye") return false;
+        const dt = d.paid_at ? new Date(d.paid_at) : new Date(d.date);
+        return dt.getFullYear() === prevYear && dt.getMonth() === prevMonth;
+      });
+      const tvaCollectee =
+        periodPaid.reduce((s, d) => s + d.total_tva, 0) -
+        periodAvoir.reduce((s, d) => s + d.total_tva, 0);
+      const periodDep = depenses.filter((d) => {
+        const dt = new Date(d.date);
+        return dt.getFullYear() === prevYear && dt.getMonth() === prevMonth;
+      });
+      const tvaDeductible = periodDep.reduce((s, d) => s + d.montant_tva, 0);
+      const solde = tvaCollectee - tvaDeductible;
+      const moisLabel = `${MOIS_FR[prevMonth]} ${prevYear}`;
+
+      if (daysLeft < 0) {
+        insights.push({
+          id: `ca3-late-${prevYear}-${prevMonth + 1}`,
+          icon: "🔴",
+          color: "red",
+          priority: 0,
+          title: `Déclaration TVA de ${moisLabel} — tu es en retard`,
+          detail: `La date limite du 20 est passée sans que la déclaration soit déposée. Ce n'est pas catastrophique si tu agis maintenant — une pénalité de 5% s'applique, mais elle ne grossit pas à l'infini.\n\n• Ce que tes clients t'ont versé en TVA : ${fmt(tvaCollectee)}\n• Ce que tu peux déduire sur tes achats : ${fmt(tvaDeductible)}\n• ${solde > 0 ? `Ce que tu dois reverser à l'État : ${fmt(solde)}` : `Crédit de TVA — l'État te doit : ${fmt(Math.abs(solde))}`}\n\nVa sur impots.gouv.fr → espace professionnel → Déclarer → TVA. Tu n'as qu'à recopier ces chiffres.\n\nRéférences sur le formulaire : case L.14 = ${fmt(tvaCollectee)} · case L.21 = ${fmt(tvaDeductible)} · case ${solde >= 0 ? "L.29" : "L.28"} = ${fmt(Math.abs(solde))}`,
+          action: "Qu'est-ce que je risque et comment régulariser ?",
+          euros: Math.abs(solde),
+        });
+      } else if (daysLeft <= 10) {
+        insights.push({
+          id: `ca3-deadline-${prevYear}-${prevMonth + 1}`,
+          icon: daysLeft <= 3 ? "🔴" : "🟠",
+          color: daysLeft <= 3 ? "red" : "orange",
+          priority: 0,
+          title: `Déclaration TVA de ${moisLabel} — ${daysLeft === 0 ? "c'est aujourd'hui" : `il reste ${daysLeft} jour${daysLeft > 1 ? "s" : ""}`}`,
+          detail: `Chaque mois tu collectes de la TVA pour le compte de l'État — il faut la lui reverser avant le 20. J'ai calculé tout ça pour toi :\n\n• Ce que tes clients t'ont versé en TVA : ${fmt(tvaCollectee)}\n• Ce que tu peux déduire sur tes propres achats : ${fmt(tvaDeductible)}\n• Ce que tu dois reverser à l'État : ${fmt(Math.abs(solde))}${solde < 0 ? " (crédit — l'État te doit de l'argent)" : ""}\n\nPour déposer : impots.gouv.fr → ton espace professionnel → Déclarer → TVA. Tu n'as qu'à recopier ces chiffres.\n\nRéférences sur le formulaire : case L.14 (TVA collectée) = ${fmt(tvaCollectee)} · case L.21 (total déductions) = ${fmt(tvaDeductible)} · case ${solde >= 0 ? "L.29 (TVA à payer)" : "L.28 (crédit de TVA)"} = ${fmt(Math.abs(solde))}`,
+          action: "Explique-moi comment remplir la déclaration pas à pas",
+          euros: Math.abs(solde),
+        });
+      }
+    }
+  }
+
+  if (regime === "reel_trimestriel") {
+    const currentQ = Math.floor(now.getMonth() / 3) + 1;
+    const prevQ = currentQ === 1 ? 4 : currentQ - 1;
+    const prevYear = currentQ === 1 ? now.getFullYear() - 1 : now.getFullYear();
+    const qEndMonth = prevQ * 3;
+    const deadline = new Date(
+      qEndMonth === 12 ? now.getFullYear() : prevYear,
+      qEndMonth === 12 ? 0 : qEndMonth,
+      24,
+    );
+    const daysLeft = Math.round((deadline.getTime() - now.getTime()) / 86400000);
+    const alreadyDone = declarations.some((d) => d.annee === prevYear && d.trimestre === prevQ);
+
+    if (!alreadyDone && daysLeft >= 0 && daysLeft <= 14) {
+      const periodPaid = documents.filter((d) => {
+        if (d.type !== "facture" || d.status !== "paye") return false;
+        const dt = d.paid_at ? new Date(d.paid_at) : new Date(d.date);
+        return dt.getFullYear() === prevYear && Math.floor(dt.getMonth() / 3) + 1 === prevQ;
+      });
+      const tvaCollectee = periodPaid.reduce((s, d) => s + d.total_tva, 0);
+      const periodDep = depenses.filter((d) => {
+        const dt = new Date(d.date);
+        return dt.getFullYear() === prevYear && Math.floor(dt.getMonth() / 3) + 1 === prevQ;
+      });
+      const tvaDeductible = periodDep.reduce((s, d) => s + d.montant_tva, 0);
+      const solde = tvaCollectee - tvaDeductible;
+
+      insights.push({
+        id: `ca3-q-deadline-${prevYear}-${prevQ}`,
+        icon: daysLeft <= 5 ? "🔴" : "🟠",
+        color: daysLeft <= 5 ? "red" : "orange",
+        priority: 0,
+        title: `Déclaration TVA du trimestre ${prevQ} — ${daysLeft <= 5 ? `urgent, ${daysLeft} jour${daysLeft > 1 ? "s" : ""}` : `${daysLeft} jours restants`}`,
+        detail: `Tu déclares ta TVA chaque trimestre — la deadline pour ce trimestre est le ${deadline.toLocaleDateString("fr-FR")}. J'ai calculé tout ça pour toi :\n\n• TVA encaissée auprès de tes clients ce trimestre : ${fmt(tvaCollectee)}\n• TVA que tu peux récupérer sur tes achats : ${fmt(tvaDeductible)}\n• Ce que tu dois reverser à l'État : ${fmt(Math.abs(solde))}${solde < 0 ? " (crédit — l'État te doit de l'argent)" : ""}\n\nPour déposer : impots.gouv.fr → ton espace professionnel → Déclarer → TVA. Tu n'as qu'à recopier ces chiffres.\n\nRéférences sur le formulaire : case L.14 = ${fmt(tvaCollectee)} · case L.21 = ${fmt(tvaDeductible)} · case ${solde >= 0 ? "L.29 (TVA à payer)" : "L.28 (crédit de TVA)"} = ${fmt(Math.abs(solde))}`,
+        action: "Explique-moi comment remplir la déclaration pas à pas",
+        euros: Math.abs(solde),
+      });
+    }
+  }
+
+  if (regime === "franchise_base") {
+    const thisYear = now.getFullYear();
+    const caHT =
+      documents
+        .filter((d) => {
+          if (d.type !== "facture" || d.status !== "paye") return false;
+          const yr = d.paid_at ? new Date(d.paid_at).getFullYear() : new Date(d.date).getFullYear();
+          return yr === thisYear;
+        })
+        .reduce((s, d) => s + d.total_ht, 0) -
+      documents
+        .filter((d) => {
+          if (d.type !== "avoir" || d.status !== "paye") return false;
+          const yr = d.paid_at ? new Date(d.paid_at).getFullYear() : new Date(d.date).getFullYear();
+          return yr === thisYear;
+        })
+        .reduce((s, d) => s + d.total_ht, 0);
+
+    const seuilServices = 77700;
+    const pct = caHT > 0 ? (caHT / seuilServices) * 100 : 0;
+    const restant = Math.max(seuilServices - caHT, 0);
+
+    if (pct >= 70) {
+      insights.push({
+        id: `franchise-seuil-${thisYear}-${Math.round(pct)}`,
+        icon: pct >= 90 ? "🔴" : "🟠",
+        color: pct >= 90 ? "red" : "orange",
+        priority: pct >= 90 ? 0 : 1,
+        title: `Tu approches la limite au-delà de laquelle tu devras facturer la TVA`,
+        detail: `Tu es en franchise de TVA — un avantage qui te permet de ne pas facturer la TVA à tes clients. Mais ce statut a une limite annuelle : ${fmt(seuilServices)} de chiffre d'affaires.\n\nAujourd'hui tu en es à ${fmt(caHT)}, soit ${pct.toFixed(0)}% de cette limite. Il te reste ${fmt(restant)} avant de la dépasser.\n\n${pct >= 90 ? "C'est très peu. Attention : si tu dépasses, tu devras facturer la TVA rétroactivement à partir de la facture qui a fait déborder — pas depuis janvier. Parle-en à un expert-comptable maintenant." : "Ça veut dire que si tes prochaines factures dépassent ce montant, ton statut change automatiquement. Anticipe si tu as des devis importants en cours."}`,
+        action: pct >= 90 ? "Que se passe-t-il concrètement si je dépasse ?" : "Comment me préparer si j'approche du seuil ?",
+        euros: caHT,
       });
     }
   }

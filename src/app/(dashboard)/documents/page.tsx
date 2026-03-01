@@ -888,6 +888,14 @@ function InvoicePreview({ doc, lines, clientName }: { doc: Doc; lines: DocumentL
           {org.siret && <p>SIRET {org.siret} — TVA {org.tva_number || "N/A"}</p>}
           {(org.rib_iban || org.rib_bic) && <p>IBAN : {org.rib_iban || "—"} — BIC : {org.rib_bic || "—"}</p>}
           <p className="mt-2">En cas de retard de paiement, une pénalité de 3x le taux d&apos;intérêt légal sera appliquée, ainsi qu&apos;une indemnité forfaitaire de 40€ pour frais de recouvrement.</p>
+          {(org.regime_tva === "franchise_base" || org.regime_tva === "exonere") &&
+            (doc.type === "facture" || doc.type === "avoir") && (
+            <p className="mt-2 font-semibold text-amber-600">
+              {org.regime_tva === "franchise_base"
+                ? "TVA non applicable — art. 293 B du CGI"
+                : "Exonération de TVA — art. 261 du CGI"}
+            </p>
+          )}
         </div>
       </div>
     </div>

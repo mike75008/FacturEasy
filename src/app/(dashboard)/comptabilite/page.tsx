@@ -8,19 +8,21 @@ import { PageTransition } from "@/components/premium/page-transition";
 import {
   TrendingUp, TrendingDown, Receipt, Clock, CheckCircle2,
   Download, BookOpen, AlertTriangle, Users, BarChart3,
-  FileCheck, Plus, Trash2, X, Paperclip, Eye, Sparkles,
+  FileCheck, Plus, Trash2, X, Paperclip, Eye, Sparkles, Scale,
 } from "lucide-react";
 import { useAppContext } from "@/lib/context/app-context";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
-import { CATEGORIES, TVA_RATES, saveDepense, deleteDepense } from "@/lib/depenses";
+import { CATEGORIES, CATEGORIES_IMMOB, TVA_RATES, saveDepense, deleteDepense } from "@/lib/depenses";
 import {
   saveDeclarationTVADB,
   getDeclarationsTVADB,
   uploadJustificatif,
   getJustificatifUrl,
   saveDepenseDB,
+  getOrganization as getOrganizationDB,
 } from "@/lib/supabase/data";
-import type { Depense, DeclarationTVA, Document } from "@/types/database";
+import { getOrganization as getOrganizationLS } from "@/lib/local-storage";
+import type { Depense, DeclarationTVA, Document, Organization } from "@/types/database";
 
 const MONTH_NAMES = [
   "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
@@ -53,16 +55,31 @@ const BLANK_FORM = {
 
 export default function ComptabilitePage() {
   const { documents, clients, depenses, refreshDepenses, dataLoading: loading } = useAppContext();
+  const [org, setOrg] = useState<Organization | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(BLANK_FORM);
   const [saving, setSaving] = useState(false);
   const [declarations, setDeclarations] = useState<DeclarationTVA[]>([]);
   const [archiving, setArchiving] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [seuilType, setSeuilType] = useState<"services" | "commerce">("services");
 
   useEffect(() => {
     getDeclarationsTVADB().then(setDeclarations).catch(() => {});
+    getOrganizationDB()
+      .then((orgData) => {
+        const lsOrg = getOrganizationLS();
+        setOrg({ ...orgData, regime_tva: orgData.regime_tva ?? lsOrg.regime_tva });
+      })
+      .catch(() => setOrg(getOrganizationLS()));
+    const stored = localStorage.getItem("compta_seuil_type") as "services" | "commerce" | null;
+    if (stored) setSeuilType(stored);
   }, []);
+
+  function handleSeuilType(t: "services" | "commerce") {
+    setSeuilType(t);
+    localStorage.setItem("compta_seuil_type", t);
+  }
 
   // ── Années ────────────────────────────────────────────────────────────────
   const availableYears = useMemo(() => {
@@ -185,9 +202,15 @@ export default function ComptabilitePage() {
       recettes[r].ht -= d.total_ht; recettes[r].tva -= d.total_tva;
     }
     const charges: Record<number, { ht: number; tva: number }> = {};
+    const immobTva = { ht: 0, tva: 0 };
     for (const d of yearDepenses) {
-      if (!charges[d.tva_rate]) charges[d.tva_rate] = { ht: 0, tva: 0 };
-      charges[d.tva_rate].ht += d.montant_ht; charges[d.tva_rate].tva += d.montant_tva;
+      const isImmob = d.categorie_code.startsWith("2");
+      if (isImmob) {
+        immobTva.ht += d.montant_ht; immobTva.tva += d.montant_tva;
+      } else {
+        if (!charges[d.tva_rate]) charges[d.tva_rate] = { ht: 0, tva: 0 };
+        charges[d.tva_rate].ht += d.montant_ht; charges[d.tva_rate].tva += d.montant_tva;
+      }
     }
     const allRates = new Set([
       ...Object.keys(recettes).map(Number),
@@ -201,8 +224,10 @@ export default function ComptabilitePage() {
       tvaDeductible: charges[rate]?.tva ?? 0,
     }));
     const totalCollectee = rows.reduce((s, r) => s + r.tvaCollectee, 0);
-    const totalDeductible = rows.reduce((s, r) => s + r.tvaDeductible, 0);
-    return { rows, totalCollectee, totalDeductible, solde: totalCollectee - totalDeductible };
+    const totalDeductibleAutres = rows.reduce((s, r) => s + r.tvaDeductible, 0);
+    const totalDeductibleImmob = immobTva.tva;
+    const totalDeductible = totalDeductibleAutres + totalDeductibleImmob;
+    return { rows, totalCollectee, totalDeductible, totalDeductibleAutres, totalDeductibleImmob, solde: totalCollectee - totalDeductible };
   }, [allPaidInvYear, allPaidAvoirYear, yearDepenses]);
 
   // ── Balance âgée ──────────────────────────────────────────────────────────
@@ -260,6 +285,27 @@ export default function ComptabilitePage() {
   );
   const maxMonthCA = Math.max(...monthlyData.map((m) => m.caHT), 1);
 
+  // ── Bilan simplifié ───────────────────────────────────────────────────────
+  const bilanData = useMemo(() => {
+    const factures = allPaidInvYear.reduce((s, d) => s + d.total_ht, 0);
+    const avoirs = allPaidAvoirYear.reduce((s, d) => s + d.total_ht, 0);
+    const totalProduits = factures - avoirs;
+    const chargesByCode: Record<string, { lib: string; ht: number }> = {};
+    for (const dep of yearDepenses) {
+      if (!chargesByCode[dep.categorie_code]) {
+        chargesByCode[dep.categorie_code] = { lib: dep.categorie_lib, ht: 0 };
+      }
+      chargesByCode[dep.categorie_code].ht += dep.montant_ht;
+    }
+    const chargesRows = Object.entries(chargesByCode)
+      .map(([code, v]) => ({ code, lib: v.lib, ht: v.ht }))
+      .sort((a, b) => b.ht - a.ht);
+    const totalCharges = yearDepenses.reduce((s, d) => s + d.montant_ht, 0);
+    const resultat = totalProduits - totalCharges;
+    const marge = totalProduits > 0 ? Math.round((resultat / totalProduits) * 100) : null;
+    return { factures, avoirs, totalProduits, chargesRows, totalCharges, resultat, marge };
+  }, [allPaidInvYear, allPaidAvoirYear, yearDepenses]);
+
   // ── Journal ───────────────────────────────────────────────────────────────
   const journal = useMemo(() =>
     [...allPaidInvYear].sort((a, b) => {
@@ -273,34 +319,62 @@ export default function ComptabilitePage() {
   // ── Sam — période en attente ───────────────────────────────────────────────
   const samPeriod = useMemo(() => {
     const now = new Date();
-    const prevMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
-    const prevMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-    const monthName = MONTH_NAMES[prevMonth];
+    const regime = org?.regime_tva ?? "reel_mensuel";
 
-    // Deadline légale : 20 du mois courant
-    const deadline = new Date(now.getFullYear(), now.getMonth(), 20);
+    let periodLabel = "";
+    let periodYear = now.getFullYear();
+    let periodMois: number | null = null;
+    let periodTrimestre: number | null = null;
+    let deadline: Date;
+    let filterFn: (dt: Date) => boolean;
+    let alreadyDone = false;
+
+    if (regime === "reel_trimestriel") {
+      // Trimestre précédent
+      const currentQ = Math.floor(now.getMonth() / 3) + 1;
+      const prevQ = currentQ === 1 ? 4 : currentQ - 1;
+      periodYear = currentQ === 1 ? now.getFullYear() - 1 : now.getFullYear();
+      periodTrimestre = prevQ;
+      const qEndMonth = prevQ * 3; // mois de fin du trimestre (1-indexed)
+      // Deadline : 24 du mois suivant la fin du trimestre
+      deadline = new Date(
+        qEndMonth === 12 ? now.getFullYear() : periodYear,
+        qEndMonth === 12 ? 0 : qEndMonth,
+        24,
+      );
+      periodLabel = `T${prevQ} ${periodYear}`;
+      alreadyDone = declarations.some(
+        (d) => d.annee === periodYear && d.trimestre === prevQ,
+      );
+      filterFn = (dt) =>
+        dt.getFullYear() === periodYear &&
+        Math.floor(dt.getMonth() / 3) + 1 === prevQ;
+    } else {
+      // Mois précédent
+      const prevMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+      const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+      periodYear = prevYear;
+      periodMois = prevMonth + 1;
+      deadline = new Date(now.getFullYear(), now.getMonth(), 20);
+      periodLabel = `${MONTH_NAMES[prevMonth]} ${prevYear}`;
+      alreadyDone = declarations.some(
+        (d) => d.annee === prevYear && d.mois === prevMonth + 1,
+      );
+      filterFn = (dt) =>
+        dt.getFullYear() === prevYear && dt.getMonth() === prevMonth;
+    }
+
     const daysLeft = Math.round((deadline.getTime() - now.getTime()) / 86400000);
 
-    // Déjà archivée ?
-    const alreadyDone = declarations.some(
-      (d) => d.annee === prevMonthYear && d.mois === prevMonth + 1,
-    );
-
-    // Calcul CA3 sur le mois précédent uniquement
     const periodPaidInv = documents.filter((d) => {
       if (d.type !== "facture" || d.status !== "paye") return false;
-      const dt = d.paid_at ? new Date(d.paid_at) : new Date(d.date);
-      return dt.getFullYear() === prevMonthYear && dt.getMonth() === prevMonth;
+      return filterFn(d.paid_at ? new Date(d.paid_at) : new Date(d.date));
     });
     const periodPaidAvoir = documents.filter((d) => {
       if (d.type !== "avoir" || d.status !== "paye") return false;
-      const dt = d.paid_at ? new Date(d.paid_at) : new Date(d.date);
-      return dt.getFullYear() === prevMonthYear && dt.getMonth() === prevMonth;
+      return filterFn(d.paid_at ? new Date(d.paid_at) : new Date(d.date));
     });
-    const periodDepenses = depenses.filter((d) => {
-      const dt = new Date(d.date);
-      return dt.getFullYear() === prevMonthYear && dt.getMonth() === prevMonth;
-    });
+    const periodDepenses = depenses.filter((d) => filterFn(new Date(d.date)));
 
     const caHT =
       periodPaidInv.reduce((s, d) => s + d.total_ht, 0) -
@@ -313,11 +387,12 @@ export default function ComptabilitePage() {
     const solde = tvaCollectee - tvaDeductible;
 
     return {
-      month: prevMonth, year: prevMonthYear, monthName, deadline, daysLeft,
-      alreadyDone, caHT, tvaCollectee, chargesHT, tvaDeductible, solde,
+      periodLabel, year: periodYear, mois: periodMois, trimestre: periodTrimestre,
+      regime, deadline, daysLeft, alreadyDone, caHT, tvaCollectee,
+      chargesHT, tvaDeductible, solde,
       nbInvoices: periodPaidInv.length, nbDepenses: periodDepenses.length,
     };
-  }, [documents, depenses, declarations]);
+  }, [documents, depenses, declarations, org]);
 
   // ── Handlers dépenses ─────────────────────────────────────────────────────
   async function handleAddDepense(e: React.FormEvent) {
@@ -327,7 +402,7 @@ export default function ComptabilitePage() {
     setSaving(true);
     const rate = parseFloat(form.tva_rate) || 0;
     const tva = Math.round(ht * rate) / 100;
-    const cat = CATEGORIES.find((c) => c.code === form.categorie_code);
+    const cat = [...CATEGORIES, ...CATEGORIES_IMMOB].find((c) => c.code === form.categorie_code);
     const d: Depense = {
       id: `dep_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       organization_id: documents[0]?.organization_id ?? "",
@@ -383,9 +458,9 @@ export default function ComptabilitePage() {
     try {
       const decl = await saveDeclarationTVADB({
         annee: samPeriod.year,
-        mois: samPeriod.month + 1,
-        trimestre: Math.ceil((samPeriod.month + 1) / 3),
-        periodicite: "mensuelle",
+        mois: samPeriod.mois,
+        trimestre: samPeriod.trimestre ?? (samPeriod.mois ? Math.ceil(samPeriod.mois / 3) : null),
+        periodicite: samPeriod.regime === "reel_trimestriel" ? "trimestrielle" : "mensuelle",
         ca_ht: samPeriod.caHT,
         tva_collectee: samPeriod.tvaCollectee,
         charges_ht: samPeriod.chargesHT,
@@ -474,6 +549,50 @@ export default function ComptabilitePage() {
     document.body.removeChild(a); URL.revokeObjectURL(url);
   }
 
+  function exportBilanTxt() {
+    const isReel = org?.regime_tva === "reel_mensuel" || org?.regime_tva === "reel_trimestriel" || !org?.regime_tva;
+    const pad = (s: string, n: number) => s.padEnd(n, " ");
+    const lines: string[] = [
+      `BILAN SIMPLIFIÉ ${activeYear}`,
+      "─".repeat(52),
+      "",
+      "PRODUITS (recettes HT)",
+      `  ${pad("Factures encaissées", 28)}: ${bilanData.factures.toFixed(2)} €`,
+    ];
+    if (bilanData.avoirs > 0) {
+      lines.push(`  ${pad("Avoirs déduits", 28)}: -${bilanData.avoirs.toFixed(2)} €`);
+    }
+    lines.push(`  ${pad("Total produits nets", 28)}: ${bilanData.totalProduits.toFixed(2)} €`);
+    lines.push("");
+    lines.push("CHARGES (dépenses HT)");
+    if (bilanData.chargesRows.length === 0) {
+      lines.push("  Aucune dépense saisie");
+    } else {
+      bilanData.chargesRows.forEach((r) => {
+        lines.push(`  ${r.code}  ${pad(r.lib, 24)}: ${r.ht.toFixed(2)} €`);
+      });
+    }
+    lines.push(`  ${pad("Total charges", 28)}: ${bilanData.totalCharges.toFixed(2)} €`);
+    lines.push("");
+    lines.push("─".repeat(52));
+    lines.push(`${pad("RÉSULTAT BRUT", 30)}: ${bilanData.resultat.toFixed(2)} €${bilanData.marge !== null ? ` (marge ${bilanData.marge}%)` : ""}`);
+    if (isReel && ca3.totalCollectee > 0) {
+      lines.push("");
+      lines.push("TVA ANNUELLE");
+      lines.push(`  ${pad("TVA collectée", 28)}: ${ca3.totalCollectee.toFixed(2)} €`);
+      lines.push(`  ${pad("TVA déductible", 28)}: ${ca3.totalDeductible.toFixed(2)} €`);
+      lines.push(`  ${pad("Solde net", 28)}: ${ca3.solde.toFixed(2)} €`);
+    }
+    lines.push("");
+    lines.push(`Généré par FacturEasy — ${new Date().toLocaleDateString("fr-FR")}`);
+    const blob = new Blob([lines.join("\r\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `Bilan_simplifie_${activeYear}.txt`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+
   if (loading) {
     return (
       <PageTransition>
@@ -487,6 +606,12 @@ export default function ComptabilitePage() {
 
   const maxBalTTC = Math.max(...balanceAgee.buckets.map((b) => b.ttc), 1);
   const fecLignes = journal.length * 5 + yearDepenses.reduce((s, d) => s + (d.montant_tva > 0 ? 3 : 2), 0);
+  const SEUILS = { services: 77700, commerce: 188700 };
+  const seuil = SEUILS[seuilType];
+  const seuilPct = seuil > 0 ? Math.min((kpis.caHT / seuil) * 100, 100) : 0;
+  const seuilRestant = Math.max(seuil - kpis.caHT, 0);
+  const seuilBarColor = seuilPct >= 90 ? "bg-red-400" : seuilPct >= 80 ? "bg-orange-400" : seuilPct >= 60 ? "bg-amber-400" : "bg-emerald-400";
+  const seuilTextColor = seuilPct >= 90 ? "text-red-400" : seuilPct >= 80 ? "text-orange-400" : seuilPct >= 60 ? "text-amber-400" : "text-emerald-400";
 
   return (
     <PageTransition>
@@ -516,12 +641,13 @@ export default function ComptabilitePage() {
           )}
         </div>
 
-        {/* ── Sam Comptabilité ── */}
-        {samPeriod.alreadyDone ? (
+        {/* ── Sam Comptabilité (régime réel uniquement) ── */}
+        {(org?.regime_tva === "reel_mensuel" || org?.regime_tva === "reel_trimestriel" || org?.regime_tva === null || org === null) && (
+        samPeriod.alreadyDone ? (
           <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-400/8 border border-emerald-400/15">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
             <span className="text-sm font-sans text-emerald-400">
-              CA3 de {samPeriod.monthName} {samPeriod.year} archivée — Sam est à jour.
+              CA3 de {samPeriod.periodLabel} archivée — Sam est à jour.
             </span>
           </div>
         ) : (
@@ -548,7 +674,7 @@ export default function ComptabilitePage() {
                   )}
                 </div>
                 <p className="text-sm font-sans text-white/90 leading-relaxed mb-3">
-                  Ta CA3 de <span className="font-semibold text-white">{samPeriod.monthName} {samPeriod.year}</span> est prête.{" "}
+                  Ta CA3 de <span className="font-semibold text-white">{samPeriod.periodLabel}</span> est prête.{" "}
                   {samPeriod.nbInvoices === 0
                     ? "Aucune facture encaissée ce mois — rien à déclarer."
                     : <>
@@ -572,6 +698,7 @@ export default function ComptabilitePage() {
               </div>
             </div>
           </GlassCard>
+        )
         )}
 
         {/* ── KPI cards ── */}
@@ -614,7 +741,138 @@ export default function ComptabilitePage() {
           ))}
         </div>
 
+        {/* ── Section franchise en base ── */}
+        {org?.regime_tva === "franchise_base" && (
+          <GlassCard hover={false} className="border-amber-400/20">
+            <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-400" />
+                <div>
+                  <h3 className="text-lg font-display font-semibold">Franchise en base de TVA</h3>
+                  <p className="text-[10px] font-sans text-atlantic-200/40 mt-0.5">Aucune CA3 à déposer — Surveiller le seuil annuel</p>
+                </div>
+              </div>
+              {/* Toggle activité */}
+              <div className="flex items-center gap-1 p-1 rounded-lg bg-atlantic-800/50 border border-atlantic-600/20">
+                {(["services", "commerce"] as const).map((t) => (
+                  <button key={t} onClick={() => handleSeuilType(t)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-sans font-medium transition-all ${
+                      seuilType === t
+                        ? "bg-amber-400/20 border border-amber-400/30 text-amber-400"
+                        : "text-atlantic-200/40 hover:text-white"
+                    }`}
+                  >
+                    {t === "services" ? "Prestations (77 700 €)" : "Commerce (188 700 €)"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Chiffres + barre */}
+            <div className="mb-5">
+              <div className="flex items-end justify-between mb-3">
+                <div>
+                  <p className="text-xs font-sans text-atlantic-200/50 mb-1 uppercase tracking-wider">CA encaissé {activeYear}</p>
+                  <p className={`text-3xl font-display font-bold ${seuilTextColor}`}>
+                    {formatCurrency(kpis.caHT)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-sans text-atlantic-200/50 mb-1 uppercase tracking-wider">Seuil légal</p>
+                  <p className="text-lg font-display font-semibold text-atlantic-200/50">{formatCurrency(seuil)}</p>
+                </div>
+              </div>
+              <div className="h-3 rounded-full bg-atlantic-800/60 border border-atlantic-600/20 overflow-hidden mb-2">
+                <div
+                  className={`h-full rounded-full transition-all duration-1000 ${seuilBarColor}`}
+                  style={{ width: `${Math.max(seuilPct, 1.5)}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs font-sans">
+                <span className={`font-bold ${seuilTextColor}`}>{seuilPct.toFixed(1)}% du seuil atteint</span>
+                <span className="text-atlantic-200/50">
+                  {seuilRestant > 0
+                    ? `${formatCurrency(seuilRestant)} restants avant basculement TVA`
+                    : "⚠ Seuil dépassé — consultez un expert-comptable"}
+                </span>
+              </div>
+            </div>
+
+            {/* Alerte si proche du seuil */}
+            {seuilPct >= 80 && (
+              <div className={`flex items-start gap-3 p-3 rounded-lg mb-4 ${
+                seuilPct >= 90 ? "bg-red-400/10 border border-red-400/20" : "bg-orange-400/10 border border-orange-400/20"
+              }`}>
+                <AlertTriangle className={`w-4 h-4 flex-shrink-0 mt-0.5 ${seuilPct >= 90 ? "text-red-400" : "text-orange-400"}`} />
+                <p className={`text-xs font-sans leading-relaxed ${seuilPct >= 90 ? "text-red-400" : "text-orange-400"}`}>
+                  {seuilPct >= 100
+                    ? "Seuil dépassé. Vous devez facturer la TVA à partir de la facture qui a fait déborder — pas au 1er janvier. Consultez un expert-comptable immédiatement."
+                    : seuilPct >= 90
+                    ? `Attention : il ne vous reste que ${formatCurrency(seuilRestant)} avant de perdre la franchise TVA.`
+                    : `Vigilance : ${formatCurrency(seuilRestant)} restants. Anticipez si vous avez des devis en cours.`}
+                </p>
+              </div>
+            )}
+
+            {/* Mention légale obligatoire */}
+            <div className="p-3 rounded-lg bg-atlantic-800/40 border border-atlantic-600/20">
+              <p className="text-[10px] font-sans text-atlantic-200/50 mb-1.5 uppercase tracking-wider font-semibold">
+                Mention obligatoire sur toutes vos factures
+              </p>
+              <p className="text-sm font-sans text-white/80 font-mono">
+                « TVA non applicable — art. 293 B du CGI »
+              </p>
+            </div>
+          </GlassCard>
+        )}
+
+        {/* ── Section exonéré de TVA ── */}
+        {org?.regime_tva === "exonere" && (
+          <GlassCard hover={false} className="border-violet-400/20">
+            <div className="flex items-start gap-4 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-violet-400/15 border border-violet-400/25 flex items-center justify-center flex-shrink-0">
+                <Receipt className="w-5 h-5 text-violet-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-display font-semibold">Exonéré de TVA</h3>
+                <p className="text-[10px] font-sans text-atlantic-200/40 mt-0.5">
+                  Aucune déclaration TVA — Suivi recettes/charges pour la déclaration de revenus
+                </p>
+              </div>
+            </div>
+
+            {/* Recap recettes / charges / résultat */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              {[
+                { label: "Recettes HT", value: kpis.caHT, color: "text-emerald-400", bg: "bg-emerald-400/8", border: "border-emerald-400/15" },
+                { label: "Charges HT", value: kpis.totalChargesHT, color: "text-red-400", bg: "bg-red-400/8", border: "border-red-400/15" },
+                {
+                  label: "Résultat brut",
+                  value: kpis.resultatBrut,
+                  color: kpis.resultatBrut >= 0 ? "text-violet-400" : "text-red-400",
+                  bg: kpis.resultatBrut >= 0 ? "bg-violet-400/8" : "bg-red-400/8",
+                  border: kpis.resultatBrut >= 0 ? "border-violet-400/15" : "border-red-400/15",
+                },
+              ].map((item) => (
+                <div key={item.label} className={`px-4 py-3 rounded-xl ${item.bg} border ${item.border}`}>
+                  <p className="text-[10px] font-sans text-atlantic-200/50 mb-1 uppercase tracking-wider">{item.label}</p>
+                  <p className={`text-xl font-display font-bold ${item.color}`}>{formatCurrency(item.value)}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-3 rounded-lg bg-atlantic-800/40 border border-atlantic-600/20">
+              <p className="text-xs font-sans text-atlantic-200/60 leading-relaxed">
+                Vos prestations sont exonérées de TVA — aucune CA3 à déposer. Conservez vos justificatifs pour votre
+                déclaration de revenus annuelle (formulaire 2035 BNC, 2031 BIC, ou IS selon votre structure juridique).
+                Mention obligatoire sur vos factures selon l'article applicable (art. 261 CGI).
+              </p>
+            </div>
+          </GlassCard>
+        )}
+
         {/* ── CA3 Cerfa 3310 ── */}
+        {(org?.regime_tva === "reel_mensuel" || org?.regime_tva === "reel_trimestriel" || org?.regime_tva === null || org === null) && (
         <GlassCard hover={false}>
           <div className="flex items-start justify-between mb-5 gap-4 flex-wrap">
             <div className="flex items-center gap-2">
@@ -710,19 +968,19 @@ export default function ComptabilitePage() {
                   Cadre B — TVA déductible
                 </p>
               </div>
-              <div className="flex items-center justify-between px-4 py-2.5 border-x border-b border-red-400/10 opacity-35">
+              <div className={`flex items-center justify-between px-4 py-2.5 border-x border-b border-red-400/10 ${ca3.totalDeductibleImmob === 0 ? "opacity-35" : ""}`}>
                 <div className="flex items-center gap-3">
                   <span className="text-[11px] font-sans font-bold text-gold-400/50 w-7">L.19</span>
                   <span className="text-xs font-sans text-atlantic-200/60">TVA déductible sur immobilisations</span>
                 </div>
-                <span className="text-sm font-sans font-semibold text-white tabular-nums">{formatCurrency(0)}</span>
+                <span className="text-sm font-sans font-semibold text-red-400 tabular-nums">{formatCurrency(ca3.totalDeductibleImmob)}</span>
               </div>
-              <div className="flex items-center justify-between px-4 py-2.5 border-x border-b border-red-400/10">
+              <div className={`flex items-center justify-between px-4 py-2.5 border-x border-b border-red-400/10 ${ca3.totalDeductibleAutres === 0 ? "opacity-35" : ""}`}>
                 <div className="flex items-center gap-3">
                   <span className="text-[11px] font-sans font-bold text-gold-400/50 w-7">L.20</span>
                   <span className="text-xs font-sans text-atlantic-200/60">TVA déductible sur autres biens et services</span>
                 </div>
-                <span className="text-sm font-sans font-semibold text-red-400 tabular-nums">{formatCurrency(ca3.totalDeductible)}</span>
+                <span className="text-sm font-sans font-semibold text-red-400 tabular-nums">{formatCurrency(ca3.totalDeductibleAutres)}</span>
               </div>
               <div className="flex items-center justify-between px-4 py-3 border border-red-400/20 bg-red-400/8 rounded-b-lg">
                 <div className="flex items-center gap-3">
@@ -765,6 +1023,7 @@ export default function ComptabilitePage() {
             </div>
           )}
         </GlassCard>
+        )}
 
         {/* ── Dépenses ── */}
         <GlassCard hover={false}>
@@ -792,7 +1051,12 @@ export default function ComptabilitePage() {
                 <div>
                   <label className={LABEL_CLASS}>Catégorie comptable</label>
                   <select value={form.categorie_code} onChange={(e) => setForm((f) => ({ ...f, categorie_code: e.target.value }))} className={INPUT_CLASS}>
-                    {CATEGORIES.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.lib}</option>)}
+                    <optgroup label="── Charges courantes (L.20)">
+                      {CATEGORIES.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.lib}</option>)}
+                    </optgroup>
+                    <optgroup label="── Immobilisations (L.19)">
+                      {CATEGORIES_IMMOB.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.lib}</option>)}
+                    </optgroup>
                   </select>
                 </div>
                 <div><label className={LABEL_CLASS}>Montant HT (€)</label><input type="number" required min="0.01" step="0.01" placeholder="0.00" value={form.montant_ht} onChange={(e) => setForm((f) => ({ ...f, montant_ht: e.target.value }))} className={INPUT_CLASS} /></div>
@@ -998,6 +1262,126 @@ export default function ComptabilitePage() {
                 </tr>
               </tfoot>
             </table>
+          </div>
+        </GlassCard>
+
+        {/* ── Bilan simplifié ── */}
+        <GlassCard hover={false}>
+          <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <Scale className="w-5 h-5 text-violet-400" />
+              <div>
+                <h3 className="text-lg font-display font-semibold">Bilan simplifié — {activeYear}</h3>
+                <p className="text-[10px] font-sans text-atlantic-200/40 mt-0.5">
+                  {bilanData.marge !== null
+                    ? `Recettes · Charges · Marge ${bilanData.marge}%`
+                    : "Recettes · Charges · Renseigner les dépenses pour voir la marge"}
+                </p>
+              </div>
+            </div>
+            <button onClick={exportBilanTxt} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-400/10 border border-violet-400/20 text-violet-400 text-sm font-sans font-medium hover:bg-violet-400/20 transition-all">
+              <Download className="w-4 h-4" />
+              Télécharger .txt
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Produits */}
+            <div>
+              <p className="text-[10px] font-sans font-bold text-emerald-400/70 uppercase tracking-widest mb-3">Produits — recettes HT</p>
+              <div className="space-y-px">
+                <div className="flex items-center justify-between px-4 py-2.5 rounded-t-lg bg-emerald-400/5 border border-emerald-400/15">
+                  <span className="text-xs font-sans text-atlantic-200/70">Factures encaissées</span>
+                  <span className="text-sm font-sans font-semibold text-white tabular-nums">{formatCurrency(bilanData.factures)}</span>
+                </div>
+                {bilanData.avoirs > 0 && (
+                  <div className="flex items-center justify-between px-4 py-2.5 border-x border-b border-emerald-400/10">
+                    <span className="text-xs font-sans text-atlantic-200/50 italic">Avoirs déduits</span>
+                    <span className="text-sm font-sans text-red-400/80 tabular-nums">− {formatCurrency(bilanData.avoirs)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between px-4 py-3 rounded-b-lg bg-emerald-400/8 border border-emerald-400/20">
+                  <span className="text-xs font-sans font-semibold text-emerald-400 uppercase tracking-wider">Total produits nets</span>
+                  <span className="text-lg font-display font-bold text-emerald-400 tabular-nums">{formatCurrency(bilanData.totalProduits)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Charges */}
+            <div>
+              <p className="text-[10px] font-sans font-bold text-red-400/70 uppercase tracking-widest mb-3">Charges — dépenses HT par catégorie</p>
+              {bilanData.chargesRows.length === 0 ? (
+                <div className="px-4 py-6 rounded-lg bg-atlantic-800/30 border border-atlantic-600/15 text-center">
+                  <p className="text-sm font-sans text-atlantic-200/30">Aucune dépense saisie pour {activeYear}</p>
+                </div>
+              ) : (
+                <div className="space-y-px">
+                  {bilanData.chargesRows.map((row, i) => (
+                    <div key={row.code} className={`flex items-center justify-between px-4 py-2.5 border-x border-b border-red-400/10 ${i === 0 ? "rounded-t-lg border-t" : ""}`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] font-sans font-bold text-atlantic-200/30 flex-shrink-0 w-8">{row.code}</span>
+                        <span className="text-xs font-sans text-atlantic-200/60 truncate">{row.lib}</span>
+                      </div>
+                      <span className="text-sm font-sans font-semibold text-red-400/90 tabular-nums flex-shrink-0 ml-2">{formatCurrency(row.ht)}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between px-4 py-3 rounded-b-lg bg-red-400/8 border border-red-400/20">
+                    <span className="text-xs font-sans font-semibold text-red-400 uppercase tracking-wider">Total charges</span>
+                    <span className="text-lg font-display font-bold text-red-400 tabular-nums">{formatCurrency(bilanData.totalCharges)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Résultat */}
+          <div className={`mt-5 flex items-center justify-between px-6 py-5 rounded-xl border-2 ${
+            bilanData.resultat > 0
+              ? "bg-violet-400/8 border-violet-400/35"
+              : bilanData.resultat < 0
+              ? "bg-red-400/8 border-red-400/35"
+              : "bg-atlantic-800/30 border-atlantic-600/20"
+          }`}>
+            <div>
+              <p className={`text-sm font-sans font-bold uppercase tracking-wider ${bilanData.resultat >= 0 ? "text-violet-400" : "text-red-400"}`}>
+                Résultat brut {activeYear}
+              </p>
+              <p className="text-[10px] font-sans text-atlantic-200/40 mt-0.5">
+                {bilanData.marge !== null
+                  ? `Taux de marge ${bilanData.marge}% · Avant cotisations sociales et impôts`
+                  : "Renseigner les charges pour calculer la marge"}
+              </p>
+            </div>
+            <p className={`text-3xl font-display font-bold tabular-nums ${bilanData.resultat >= 0 ? "text-violet-400" : "text-red-400"}`}>
+              {formatCurrency(bilanData.resultat)}
+            </p>
+          </div>
+
+          {/* TVA annuelle pour régimes réels */}
+          {(org?.regime_tva === "reel_mensuel" || org?.regime_tva === "reel_trimestriel" || org?.regime_tva === null || org === null) && ca3.totalCollectee > 0 && (
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              {[
+                { label: "TVA collectée", value: ca3.totalCollectee, color: "text-emerald-400", bg: "bg-emerald-400/5", border: "border-emerald-400/15" },
+                { label: "TVA déductible", value: ca3.totalDeductible, color: "text-red-400", bg: "bg-red-400/5", border: "border-red-400/15" },
+                { label: ca3.solde >= 0 ? "Nette à payer" : "Crédit TVA", value: Math.abs(ca3.solde), color: ca3.solde >= 0 ? "text-amber-400" : "text-emerald-400", bg: ca3.solde >= 0 ? "bg-amber-400/5" : "bg-emerald-400/5", border: ca3.solde >= 0 ? "border-amber-400/15" : "border-emerald-400/15" },
+              ].map((item) => (
+                <div key={item.label} className={`px-4 py-3 rounded-xl ${item.bg} border ${item.border} text-center`}>
+                  <p className="text-[10px] font-sans text-atlantic-200/50 mb-1 uppercase tracking-wider">{item.label}</p>
+                  <p className={`text-lg font-display font-bold ${item.color}`}>{formatCurrency(item.value)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Note contextuelle */}
+          <div className="mt-4 px-4 py-3 rounded-lg bg-atlantic-800/40 border border-atlantic-600/20">
+            <p className="text-[10px] font-sans text-atlantic-200/50 leading-relaxed">
+              {org?.regime_tva === "franchise_base"
+                ? "Ces chiffres sont à reporter sur ta déclaration annuelle de revenus (2042 C Pro, 2035 BNC ou 2031 BIC selon ton statut). Aucune TVA à déclarer."
+                : org?.regime_tva === "exonere"
+                ? "Conserve ce bilan pour ton expert-comptable ou ta déclaration de revenus annuelle. Tes prestations étant exonérées, aucune TVA n'apparaît."
+                : "Résultat avant cotisations sociales et impôts. À transmettre à ton expert-comptable avec le FEC pour établir la liasse fiscale."}
+            </p>
           </div>
         </GlassCard>
 

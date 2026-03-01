@@ -31,6 +31,7 @@ export interface Organization {
   legal_form: string | null;
   capital: string | null;
   rcs: string | null;
+  regime_tva: "franchise_base" | "reel_mensuel" | "reel_trimestriel" | "exonere" | null;
   created_at: string;
   updated_at: string;
 }

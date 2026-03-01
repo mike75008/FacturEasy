@@ -8,6 +8,14 @@ import type { Depense } from "@/types/database";
 
 export type { Depense };
 
+// Immobilisations → ligne 19 CA3 (TVA déductible sur immobilisations)
+export const CATEGORIES_IMMOB = [
+  { code: "205", lib: "Logiciels et progiciels (immo. incorporelles)" },
+  { code: "215", lib: "Installations, matériel et outillage" },
+  { code: "218", lib: "Matériel informatique, mobilier, véhicule" },
+];
+
+// Charges courantes → ligne 20 CA3
 export const CATEGORIES = [
   { code: "601", lib: "Achats matières premières" },
   { code: "604", lib: "Achats d'études et prestations" },

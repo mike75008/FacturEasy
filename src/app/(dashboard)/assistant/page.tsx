@@ -8,8 +8,10 @@ import { useAppContext } from "@/lib/context/app-context";
 import { computeInsights, markAsSeen } from "@/lib/insights";
 import type { Insight } from "@/lib/insights";
 import { formatCurrency } from "@/lib/utils";
-import { getOrganization } from "@/lib/supabase/data";
+import { getOrganization, getDeclarationsTVADB } from "@/lib/supabase/data";
+import { getOrganization as getOrganizationLS } from "@/lib/local-storage";
 import { createTicket } from "@/lib/tickets";
+import type { Organization, DeclarationTVA } from "@/types/database";
 
 interface Message {
   role: "user" | "assistant";
@@ -54,19 +56,37 @@ function HelenaAvatar({ size = "sm" }: { size?: "sm" | "xs" }) {
 }
 
 export default function AssistantPage() {
-  const { documents, clients } = useAppContext();
+  const { documents, clients, depenses } = useAppContext();
   const [threads, setThreads] = useState<InsightThread[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [ticketCreated, setTicketCreated] = useState(false);
   const [orgName, setOrgName] = useState("votre entreprise");
+  const [org, setOrg] = useState<Organization | null>(null);
+  const [declarations, setDeclarations] = useState<DeclarationTVA[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    getOrganization()
+      .then((orgData) => {
+        const lsOrg = getOrganizationLS();
+        const merged = { ...orgData, regime_tva: orgData.regime_tva ?? lsOrg.regime_tva };
+        setOrg(merged);
+        if (orgData?.name) setOrgName(orgData.name);
+      })
+      .catch(() => {
+        const lsOrg = getOrganizationLS();
+        setOrg(lsOrg);
+        if (lsOrg?.name) setOrgName(lsOrg.name);
+      });
+    getDeclarationsTVADB().then(setDeclarations).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (!documents.length && !clients.length) return;
-    const all = computeInsights(documents, clients);
+    const all = computeInsights(documents, clients, { org, depenses, declarations });
     const withThreads: InsightThread[] = all.map((insight) => ({
       ...insight,
       thread: [{ role: "assistant" as const, content: insight.detail }],
@@ -74,13 +94,7 @@ export default function AssistantPage() {
       replyLoading: false,
     }));
     setThreads(withThreads);
-  }, [documents, clients]);
-
-  useEffect(() => {
-    getOrganization().then((org) => {
-      if (org?.name) setOrgName(org.name);
-    });
-  }, []);
+  }, [documents, clients, org, depenses, declarations]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

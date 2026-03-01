@@ -319,6 +319,7 @@ export async function saveOrganization(org: Partial<Organization>): Promise<Orga
       legal_form: org.legal_form ?? null,
       capital: org.capital ?? null,
       rcs: org.rcs ?? null,
+      regime_tva: org.regime_tva ?? null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", orgId)

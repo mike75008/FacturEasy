@@ -207,6 +207,14 @@ export function InvoicePDFDocument({
             En cas de retard de paiement, une pénalité de 3x le taux d&apos;intérêt légal sera
             appliquée, ainsi qu&apos;une indemnité forfaitaire de 40 € pour frais de recouvrement.
           </Text>
+          {(organization.regime_tva === "franchise_base" || organization.regime_tva === "exonere") &&
+            (doc.type === "facture" || doc.type === "avoir") && (
+            <Text style={[s.footerText, { fontFamily: "Helvetica-Bold" }]}>
+              {organization.regime_tva === "franchise_base"
+                ? "TVA non applicable — art. 293 B du CGI"
+                : "Exonération de TVA — art. 261 du CGI"}
+            </Text>
+          )}
         </View>
 
         <View style={s.bottomBar} />

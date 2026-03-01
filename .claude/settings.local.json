@@ -32,7 +32,8 @@
       "Bash(cmd:*)",
       "Bash(ls:*)",
       "WebFetch(domain:www.pennylane.com)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(wc:*)"
     ]
   }
 }

@@ -72,6 +72,7 @@ const DEFAULT_ORG: Organization = {
   legal_form: null,
   capital: null,
   rcs: null,
+  regime_tva: null,
   created_at: now(),
   updated_at: now(),
 };

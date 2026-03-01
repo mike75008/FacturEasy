@@ -47,6 +47,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -57,8 +58,14 @@ export default function SettingsPage() {
           getOrganizationDB(),
           getSequencesDB(),
         ]);
-        // Si Supabase retourne des données on les utilise, sinon fallback localStorage
-        setOrg(orgData ?? getOrgLS());
+        // Fusion Supabase + localStorage : Supabase prioritaire sauf pour les champs
+        // pas encore en DB (ex: regime_tva avant migration SQL).
+        const lsOrg = getOrgLS();
+        setOrg(orgData ? {
+          ...lsOrg,
+          ...orgData,
+          regime_tva: orgData.regime_tva ?? lsOrg.regime_tva,
+        } : lsOrg);
         setSequences(seqData.length > 0 ? seqData : getSeqLS());
         setLogoState(getLogo());
       } catch {
@@ -74,6 +81,8 @@ export default function SettingsPage() {
   }, []);
 
   const updateOrg = useCallback((field: keyof Organization, value: string | number | null) => {
+    setHasChanges(true);
+    setSaved(false);
     setOrg((prev) => prev ? { ...prev, [field]: value } : prev);
     const newErrors = { ...errors };
     if (field === "siret" && value && typeof value === "string" && value.replace(/\s/g, "").length > 0) {
@@ -109,7 +118,7 @@ export default function SettingsPage() {
         saveOrgLS(org);
       }
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      setHasChanges(false);
     } finally {
       setSaving(false);
     }
@@ -288,12 +297,49 @@ export default function SettingsPage() {
               />
             </div>
 
+            {/* ── Régime TVA ── */}
+            <div className="mt-8 pt-6 border-t border-gold-400/10">
+              <h4 className="text-base font-display font-semibold mb-1">Régime TVA</h4>
+              <p className="text-xs font-sans text-atlantic-200/40 mb-4">
+                Ce réglage adapte automatiquement vos déclarations, mentions légales sur factures et la CA3.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {([
+                  { value: "reel_mensuel",     label: "TVA réelle mensuelle",      desc: "Régime normal — CA3 chaque mois avant le 20",                        color: "border-emerald-400/30 bg-emerald-400/5" },
+                  { value: "reel_trimestriel", label: "TVA réelle trimestrielle",  desc: "RSI — CA3 chaque trimestre (T1 → 24 avril, T2 → 24 juillet…)",      color: "border-blue-400/30 bg-blue-400/5" },
+                  { value: "franchise_base",   label: "Franchise en base de TVA",  desc: "Auto-entrepreneur — pas de TVA collectée, mention art. 293 B CGI",   color: "border-amber-400/30 bg-amber-400/5" },
+                  { value: "exonere",          label: "Exonéré de TVA",            desc: "Professions de santé, enseignement… — mention art. 261 CGI",         color: "border-violet-400/30 bg-violet-400/5" },
+                ] as const).map(({ value, label, desc, color }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => updateOrg("regime_tva", value)}
+                    className={`text-left p-4 rounded-xl border-2 transition-all ${
+                      org.regime_tva === value
+                        ? color + " border-opacity-100"
+                        : "border-atlantic-600/20 bg-atlantic-800/20 hover:border-atlantic-500/40"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${org.regime_tva === value ? "bg-gold-400 border-gold-400" : "border-atlantic-500/40"}`} />
+                      <p className="text-sm font-sans font-semibold text-white">{label}</p>
+                    </div>
+                    <p className="text-xs font-sans text-atlantic-200/50 ml-5">{desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="mt-8 flex items-center justify-end gap-3">
-              {saved && (
-                <span className="flex items-center gap-1 text-sm font-sans text-emerald-400">
-                  <Check className="w-4 h-4" /> Enregistré
+              {hasChanges ? (
+                <span className="flex items-center gap-1.5 text-sm font-sans text-amber-400">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" /> Modifications non sauvegardées
                 </span>
-              )}
+              ) : saved ? (
+                <span className="flex items-center gap-1.5 text-sm font-sans text-emerald-400">
+                  <Check className="w-4 h-4" /> À jour
+                </span>
+              ) : null}
               <PremiumButton
                 onClick={handleSave}
                 loading={saving}
@@ -349,11 +395,15 @@ export default function SettingsPage() {
               />
             </div>
             <div className="mt-8 flex items-center justify-end gap-3">
-              {saved && (
-                <span className="flex items-center gap-1 text-sm font-sans text-emerald-400">
-                  <Check className="w-4 h-4" /> Enregistré
+              {hasChanges ? (
+                <span className="flex items-center gap-1.5 text-sm font-sans text-amber-400">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" /> Modifications non sauvegardées
                 </span>
-              )}
+              ) : saved ? (
+                <span className="flex items-center gap-1.5 text-sm font-sans text-emerald-400">
+                  <Check className="w-4 h-4" /> À jour
+                </span>
+              ) : null}
               <PremiumButton
                 onClick={handleSave}
                 loading={saving}
