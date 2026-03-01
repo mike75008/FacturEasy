@@ -48,7 +48,12 @@ ALTER TABLE numbering_sequences ADD CONSTRAINT numbering_sequences_type_check
     'recu', 'bon_commande'
   ));
 
--- ── 3. Ajouter paid_at sur documents ─────────────────────────────────────────
+-- ── 3. Ajouter regime_tva sur organizations ──────────────────────────────────
+
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS regime_tva TEXT
+  CHECK (regime_tva IN ('franchise_base', 'reel_mensuel', 'reel_trimestriel', 'exonere'));
+
+-- ── 5. Ajouter paid_at sur documents ─────────────────────────────────────────
 
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS paid_at DATE;
 
@@ -58,7 +63,7 @@ UPDATE documents
 SET paid_at = DATE(updated_at)
 WHERE status = 'paye' AND paid_at IS NULL;
 
--- ── 4. Table depenses ─────────────────────────────────────────────────────────
+-- ── 6. Table depenses ─────────────────────────────────────────────────────────
 -- Factures fournisseurs — source de la TVA déductible et du journal AC du FEC.
 
 CREATE TABLE IF NOT EXISTS depenses (
@@ -94,7 +99,7 @@ CREATE TRIGGER trg_depenses_updated_at
   BEFORE UPDATE ON depenses
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- ── 5. Table declarations_tva ─────────────────────────────────────────────────
+-- ── 7. Table declarations_tva ─────────────────────────────────────────────────
 -- Historique des CA3 archivées — chaque déclaration validée est sauvegardée.
 
 CREATE TABLE IF NOT EXISTS declarations_tva (
@@ -134,7 +139,7 @@ CREATE TRIGGER trg_declarations_tva_updated_at
   BEFORE UPDATE ON declarations_tva
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- ── 6. Storage : bucket justificatifs ────────────────────────────────────────
+-- ── 8. Storage : bucket justificatifs ────────────────────────────────────────
 -- À exécuter dans le Dashboard Supabase → Storage → New bucket
 -- (déjà fait manuellement) puis ajouter la policy via l'éditeur SQL :
 --
