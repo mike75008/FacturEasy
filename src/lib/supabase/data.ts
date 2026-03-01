@@ -784,6 +784,7 @@ export async function generateDocumentNumber(type: string): Promise<string> {
     type === "ordre_mission"      ? "OM"  :
     type === "fiche_intervention" ? "FI"  :
     type === "recu"               ? "RCU" :
+    type === "bon_commande"       ? "BC"  :
     type.slice(0, 3).toUpperCase();
 
   if (!seq) {
@@ -812,4 +813,102 @@ export async function generateDocumentNumber(type: string): Promise<string> {
   if (updateError) throw new Error(updateError.message);
 
   return `${prefix}-${year}-${String(nextNum).padStart(5, "0")}`;
+}
+
+// ─── DÉPENSES ────────────────────────────────────────────────────────────────
+
+import type { Depense, DeclarationTVA } from "@/types/database";
+
+export async function getDepensesDB(): Promise<Depense[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("depenses")
+    .select("*")
+    .order("date", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function saveDepenseDB(d: Partial<Depense> & { id?: string }): Promise<Depense> {
+  const supabase = createClient();
+  const orgId = await getCurrentOrgId();
+  if (!orgId) throw new Error("Non authentifié");
+
+  const payload = { ...d, organization_id: orgId };
+
+  if (d.id) {
+    const { data, error } = await supabase
+      .from("depenses")
+      .upsert(payload)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
+  const { data, error } = await supabase
+    .from("depenses")
+    .insert(payload)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function deleteDepenseDB(id: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("depenses").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function uploadJustificatif(
+  file: File,
+  orgId: string,
+  depenseId: string,
+): Promise<string> {
+  const supabase = createClient();
+  const path = `${orgId}/${depenseId}/${file.name}`;
+  const { error } = await supabase.storage
+    .from("justificatifs")
+    .upload(path, file, { upsert: true });
+  if (error) throw new Error(error.message);
+  return path;
+}
+
+export async function getJustificatifUrl(path: string): Promise<string> {
+  const supabase = createClient();
+  const { data, error } = await supabase.storage
+    .from("justificatifs")
+    .createSignedUrl(path, 3600);
+  if (error) throw new Error(error.message);
+  return data.signedUrl;
+}
+
+// ─── DÉCLARATIONS TVA ────────────────────────────────────────────────────────
+
+export async function getDeclarationsTVADB(): Promise<DeclarationTVA[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("declarations_tva")
+    .select("*")
+    .order("annee", { ascending: false })
+    .order("mois", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function saveDeclarationTVADB(
+  d: Omit<DeclarationTVA, "id" | "organization_id" | "created_at" | "updated_at">,
+): Promise<DeclarationTVA> {
+  const supabase = createClient();
+  const orgId = await getCurrentOrgId();
+  if (!orgId) throw new Error("Non authentifié");
+
+  const { data, error } = await supabase
+    .from("declarations_tva")
+    .insert({ ...d, organization_id: orgId })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
 }

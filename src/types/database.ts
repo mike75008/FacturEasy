@@ -2,7 +2,7 @@
 
 export type UserRole = "owner" | "admin" | "accountant" | "viewer";
 export type ClientType = "particulier" | "professionnel";
-export type DocumentType = "facture" | "devis" | "avoir" | "bon_livraison" | "contrat" | "ordre_mission" | "fiche_intervention" | "recu";
+export type DocumentType = "facture" | "devis" | "avoir" | "bon_livraison" | "contrat" | "ordre_mission" | "fiche_intervention" | "recu" | "bon_commande";
 export type DocumentStatus = "brouillon" | "valide" | "envoye" | "paye" | "annule" | "refuse";
 export type ReminderChannel = "email" | "sms" | "appel";
 export type ReminderPriority = "low" | "medium" | "high" | "critical";
@@ -103,7 +103,45 @@ export interface Document {
   validated_by: string | null;
   validated_at: string | null;
   pdf_url: string | null;
+  paid_at: string | null;
   created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Depense {
+  id: string;
+  organization_id: string;
+  date: string;
+  fournisseur: string;
+  description: string;
+  categorie_code: string;
+  categorie_lib: string;
+  montant_ht: number;
+  tva_rate: number;
+  montant_tva: number;
+  montant_ttc: number;
+  piece_ref: string;
+  piece_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeclarationTVA {
+  id: string;
+  organization_id: string;
+  annee: number;
+  mois: number | null;
+  trimestre: number | null;
+  periodicite: "mensuelle" | "trimestrielle";
+  ca_ht: number;
+  tva_collectee: number;
+  charges_ht: number;
+  tva_deductible: number;
+  solde_tva: number;
+  statut: "simulee" | "deposee";
+  deposee_le: string | null;
+  notes: string | null;
   created_at: string;
   updated_at: string;
 }

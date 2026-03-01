@@ -8,6 +8,7 @@ import {
   getClients as getClientsDB,
   getProducts as getProductsDB,
   getReminders as getRemindersDB,
+  getDepensesDB,
 } from "@/lib/supabase/data";
 import {
   getDocuments as getDocumentsLS,
@@ -15,26 +16,25 @@ import {
   getProducts as getProductsLS,
   getReminders as getRemindersLS,
 } from "@/lib/local-storage";
+import { getDepenses as getDepensesLS } from "@/lib/depenses";
 import type { AppNotification } from "@/lib/supabase/data";
-import type { Document as Doc, Client, Product, Reminder } from "@/types/database";
+import type { Document as Doc, Client, Product, Reminder, Depense } from "@/types/database";
 
 interface AppContextValue {
-  // Auth
   userName: string;
   userEmail: string;
-  // Notifications
   notifications: AppNotification[];
-  // Données partagées
   documents: Doc[];
   clients: Client[];
   products: Product[];
   reminders: Reminder[];
+  depenses: Depense[];
   dataLoading: boolean;
-  // Refresh ciblé après mutation
   refreshDocuments: () => Promise<void>;
   refreshClients: () => Promise<void>;
   refreshProducts: () => Promise<void>;
   refreshReminders: () => Promise<void>;
+  refreshDepenses: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue>({
@@ -45,11 +45,13 @@ const AppContext = createContext<AppContextValue>({
   clients: [],
   products: [],
   reminders: [],
+  depenses: [],
   dataLoading: true,
   refreshDocuments: async () => {},
   refreshClients: async () => {},
   refreshProducts: async () => {},
   refreshReminders: async () => {},
+  refreshDepenses: async () => {},
 });
 
 export function useAppContext() {
@@ -64,6 +66,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [clients, setClients] = useState<Client[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [depenses, setDepenses] = useState<Depense[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
   const refreshDocuments = useCallback(async () => {
@@ -102,44 +105,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const refreshDepenses = useCallback(async () => {
+    try {
+      const data = await getDepensesDB();
+      setDepenses(data);
+    } catch {
+      const ls = await getDepensesLS();
+      setDepenses(ls);
+    }
+  }, []);
+
   useEffect(() => {
     const supabase = createClient();
 
-    // Session utilisateur — une seule fois
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        const name =
+        setUserName(
           session.user.user_metadata?.full_name ||
           session.user.email?.split("@")[0] ||
-          "Utilisateur";
-        setUserName(name);
+          "Utilisateur",
+        );
         setUserEmail(session.user.email || "");
       }
     });
 
-    // Chargement initial de toutes les données en parallèle
     Promise.all([
       getDocumentsDB().catch(() => null),
       getClientsDB().catch(() => null),
       getProductsDB().catch(() => null),
       getRemindersDB().catch(() => null),
       computeNotifications().catch(() => null),
-    ]).then(([docs, cls, prods, rems, notifs]) => {
+      getDepensesDB().catch(() => null),
+    ]).then(([docs, cls, prods, rems, notifs, deps]) => {
       setDocuments(docs && docs.length > 0 ? docs : getDocumentsLS());
       setClients(cls && cls.length > 0 ? cls : getClientsLS());
       setProducts(prods && prods.length > 0 ? prods : getProductsLS());
       setReminders(rems && rems.length > 0 ? rems : getRemindersLS());
       if (notifs) setNotifications(notifs);
+      if (deps) setDepenses(deps);
       setDataLoading(false);
     });
 
-    // Realtime — un seul canal, rafraîchit les documents + notifications
     const channel = supabase
       .channel("app-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "documents" }, () => {
-        getDocumentsDB().then((docs) => {
-          if (docs.length > 0) setDocuments(docs);
-        });
+        getDocumentsDB().then((docs) => { if (docs.length > 0) setDocuments(docs); });
         computeNotifications().then(setNotifications).catch(() => {});
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, () => {
@@ -151,18 +161,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "reminders" }, () => {
         getRemindersDB().then((rems) => { if (rems.length > 0) setReminders(rems); });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "depenses" }, () => {
+        getDepensesDB().then(setDepenses).catch(() => {});
+      })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   return (
     <AppContext.Provider value={{
       userName, userEmail, notifications,
-      documents, clients, products, reminders, dataLoading,
-      refreshDocuments, refreshClients, refreshProducts, refreshReminders,
+      documents, clients, products, reminders, depenses,
+      dataLoading,
+      refreshDocuments, refreshClients, refreshProducts,
+      refreshReminders, refreshDepenses,
     }}>
       {children}
     </AppContext.Provider>

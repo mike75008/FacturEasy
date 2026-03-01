@@ -111,10 +111,15 @@ export function getSequences(): NumberingSequence[] {
   // Initialize defaults
   const year = new Date().getFullYear();
   const defaults: NumberingSequence[] = [
-    { id: generateId(), organization_id: "org-default", document_type: "facture", prefix: "FAC", current_number: 0, fiscal_year: year, created_at: now() },
-    { id: generateId(), organization_id: "org-default", document_type: "devis", prefix: "DEV", current_number: 0, fiscal_year: year, created_at: now() },
-    { id: generateId(), organization_id: "org-default", document_type: "avoir", prefix: "AVO", current_number: 0, fiscal_year: year, created_at: now() },
-    { id: generateId(), organization_id: "org-default", document_type: "bon_livraison", prefix: "BL", current_number: 0, fiscal_year: year, created_at: now() },
+    { id: generateId(), organization_id: "org-default", document_type: "facture",            prefix: "FAC", current_number: 0, fiscal_year: year, created_at: now() },
+    { id: generateId(), organization_id: "org-default", document_type: "devis",              prefix: "DEV", current_number: 0, fiscal_year: year, created_at: now() },
+    { id: generateId(), organization_id: "org-default", document_type: "avoir",              prefix: "AVO", current_number: 0, fiscal_year: year, created_at: now() },
+    { id: generateId(), organization_id: "org-default", document_type: "bon_livraison",      prefix: "BL",  current_number: 0, fiscal_year: year, created_at: now() },
+    { id: generateId(), organization_id: "org-default", document_type: "contrat",            prefix: "CTR", current_number: 0, fiscal_year: year, created_at: now() },
+    { id: generateId(), organization_id: "org-default", document_type: "ordre_mission",      prefix: "OM",  current_number: 0, fiscal_year: year, created_at: now() },
+    { id: generateId(), organization_id: "org-default", document_type: "fiche_intervention", prefix: "FI",  current_number: 0, fiscal_year: year, created_at: now() },
+    { id: generateId(), organization_id: "org-default", document_type: "recu",               prefix: "RCU", current_number: 0, fiscal_year: year, created_at: now() },
+    { id: generateId(), organization_id: "org-default", document_type: "bon_commande",       prefix: "BC",  current_number: 0, fiscal_year: year, created_at: now() },
   ];
   setStore("sequences", defaults);
   return defaults;

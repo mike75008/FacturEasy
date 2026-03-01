@@ -37,9 +37,9 @@ import type { Document as Doc, DocumentLine, Client, Product } from "@/types/dat
 
 type ViewMode = "list" | "create" | "detail";
 type DocTypeFilter = "all" | "facture" | "devis" | "avoir" | "bon_livraison" | "autres";
-type DocType = "facture" | "devis" | "avoir" | "bon_livraison" | "contrat" | "ordre_mission" | "fiche_intervention" | "recu";
+type DocType = "facture" | "devis" | "avoir" | "bon_livraison" | "contrat" | "ordre_mission" | "fiche_intervention" | "recu" | "bon_commande";
 
-const AUTRES_TYPES: DocType[] = ["contrat", "ordre_mission", "fiche_intervention", "recu"];
+const AUTRES_TYPES: DocType[] = ["contrat", "ordre_mission", "fiche_intervention", "recu", "bon_commande"];
 
 const DOC_TYPE_CONFIG: Record<DocType, { label: string; labelNew: string; short: string; color: string; dueDateLabel: string; showDueDate: boolean; showPayé: boolean }> = {
   facture:             { label: "Facture",               labelNew: "Nouvelle facture",               short: "FAC", color: "bg-emerald-400/10 text-emerald-400",  dueDateLabel: "Date d'échéance",     showDueDate: true,  showPayé: true  },
@@ -50,6 +50,7 @@ const DOC_TYPE_CONFIG: Record<DocType, { label: string; labelNew: string; short:
   ordre_mission:       { label: "Ordre de mission",      labelNew: "Nouvel ordre de mission",        short: "OM",  color: "bg-indigo-400/10 text-indigo-400",     dueDateLabel: "Date de fin mission",  showDueDate: true,  showPayé: false },
   fiche_intervention:  { label: "Fiche d'intervention",  labelNew: "Nouvelle fiche d'intervention",  short: "FI",  color: "bg-orange-400/10 text-orange-400",     dueDateLabel: "Date d'intervention",  showDueDate: true,  showPayé: false },
   recu:                { label: "Reçu",                  labelNew: "Nouveau reçu",                   short: "RCU", color: "bg-teal-400/10 text-teal-400",         dueDateLabel: "Date de règlement",    showDueDate: false, showPayé: false },
+  bon_commande:        { label: "Bon de commande",        labelNew: "Nouveau bon de commande",        short: "BC",  color: "bg-rose-400/10 text-rose-400",         dueDateLabel: "Date de livraison",    showDueDate: true,  showPayé: false },
 };
 
 // ─── SECTEURS MÉTIER ──────────────────────────────────────────────────────────
@@ -441,7 +442,11 @@ export default function DocumentsPage() {
   }
 
   async function updateStatus(doc: Doc, status: string) {
-    const updated = { ...doc, status: status as Doc["status"] };
+    const updated = {
+      ...doc,
+      status: status as Doc["status"],
+      ...(status === "paye" ? { paid_at: new Date().toISOString().split("T")[0] } : {}),
+    };
     if (selectedDoc?.id === doc.id) setSelectedDoc(updated);
     try {
       await saveDocumentDB(updated);
@@ -512,10 +517,11 @@ export default function DocumentsPage() {
                     <ChevronDown className="w-3 h-3" />
                   </button>
                   {showTypeMenu && (
-                    <div className="absolute right-0 top-full mt-1 z-20 bg-atlantic-900 border border-gold-400/20 rounded-xl shadow-xl overflow-hidden min-w-[180px]">
+                    <div className="absolute right-0 top-full mt-1 z-20 bg-atlantic-900 border border-gold-400/20 rounded-xl shadow-xl overflow-hidden min-w-[220px]">
                       {([
                         { type: "avoir" as DocType, label: "Avoir", icon: RotateCcw },
                         { type: "bon_livraison" as DocType, label: "Bon de livraison", icon: Truck },
+                        { type: "bon_commande" as DocType, label: "Bon de commande", icon: FileCheck },
                         { type: "contrat" as DocType, label: "Contrat", icon: FileText },
                         { type: "ordre_mission" as DocType, label: "Ordre de mission", icon: FileCheck },
                         { type: "fiche_intervention" as DocType, label: "Fiche d'intervention", icon: Truck },
@@ -524,7 +530,7 @@ export default function DocumentsPage() {
                         <button
                           key={type}
                           onClick={() => { openCreate(type); setShowTypeMenu(false); }}
-                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-sans text-atlantic-200/70 hover:text-white hover:bg-atlantic-700/50 transition-colors"
+                          className="w-full flex items-center justify-start gap-2.5 px-4 py-2.5 text-sm font-sans text-left whitespace-nowrap text-atlantic-200/70 hover:text-white hover:bg-atlantic-700/50 transition-colors"
                         >
                           <Icon className="w-4 h-4 text-gold-400/60" />
                           {label}
@@ -715,6 +721,10 @@ export default function DocumentsPage() {
                       docType === "facture" ? "Conditions de paiement, pénalités de retard..." :
                       docType === "devis" ? "Durée de validité, conditions d'acceptation..." :
                       docType === "avoir" ? "Référence facture d'origine, motif de l'avoir..." :
+                      docType === "bon_commande" ? "Référence fournisseur, conditions de livraison, modalités de paiement..." :
+                      docType === "contrat" ? "Durée, obligations des parties, conditions de résiliation..." :
+                      docType === "ordre_mission" ? "Périmètre de la mission, durée, tarif journalier, livrables attendus..." :
+                      docType === "fiche_intervention" ? "Nature de l'intervention, observations, matériaux utilisés..." :
                       "Conditions de livraison, réserves..."
                     }
                     value={notes}
@@ -790,7 +800,7 @@ export default function DocumentsPage() {
 function InvoicePreview({ doc, lines, clientName }: { doc: Doc; lines: DocumentLine[]; clientName: string }) {
   const org = getOrganization();
   const client = getClient(doc.client_id);
-  const typeLabels: Record<string, string> = { facture: "FACTURE", devis: "DEVIS", avoir: "AVOIR", bon_livraison: "BON DE LIVRAISON" };
+  const typeLabels: Record<string, string> = { facture: "FACTURE", devis: "DEVIS", avoir: "AVOIR", bon_livraison: "BON DE LIVRAISON", contrat: "CONTRAT", ordre_mission: "ORDRE DE MISSION", fiche_intervention: "FICHE D'INTERVENTION", recu: "REÇU", bon_commande: "BON DE COMMANDE" };
 
   function handlePrint() {
     window.print();
@@ -999,6 +1009,14 @@ function DocumentDetail({ doc, lines, clients, getClientName, onBack, onUpdateSt
                 )}
                 {doc.status === "envoye" && doc.type === "fiche_intervention" && (
                   <PremiumButton size="sm" icon={<Check className="w-3.5 h-3.5" />} onClick={() => onUpdateStatus("paye")}>Terminée</PremiumButton>
+                )}
+                {doc.status === "envoye" && doc.type === "bon_commande" && (
+                  <>
+                    <PremiumButton size="sm" icon={<Check className="w-3.5 h-3.5" />} onClick={() => onUpdateStatus("paye")}>Réceptionné</PremiumButton>
+                    <button onClick={() => onUpdateStatus("refuse")} className="px-3 py-1.5 rounded-lg text-xs font-sans bg-red-400/10 text-red-400 hover:bg-red-400/20 transition-colors">
+                      Refusé
+                    </button>
+                  </>
                 )}
                 <PremiumButton variant="outline" size="sm" icon={<Edit2 className="w-3.5 h-3.5" />} onClick={onEdit}>
                   Modifier
