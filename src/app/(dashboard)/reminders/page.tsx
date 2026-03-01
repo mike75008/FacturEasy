@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Topbar } from "@/components/dashboard/topbar";
 import { GlassCard } from "@/components/premium/glass-card";
 import { PremiumButton } from "@/components/premium/premium-button";
 import { PageTransition } from "@/components/premium/page-transition";
 import {
   Bell, Brain, Mail, Phone, Plus, Send, Clock, AlertTriangle,
-  CheckCircle2, Sparkles, ChevronRight, MessageSquare,
+  CheckCircle2, Sparkles, ChevronRight, MessageSquare, Zap, ExternalLink,
 } from "lucide-react";
 import {
   saveReminder as saveReminderLS,
+  getReminders as getRemindersLS,
 } from "@/lib/local-storage";
 import {
   saveReminder as saveReminderDB,
@@ -34,6 +36,7 @@ const CHANNEL_ICONS = {
 };
 
 export default function RemindersPage() {
+  const router = useRouter();
   const { reminders: ctxReminders, documents, clients, refreshReminders } = useAppContext();
   const [reminders, setReminders] = useState<Reminder[]>(ctxReminders);
   const [showCreate, setShowCreate] = useState(false);
@@ -42,11 +45,41 @@ export default function RemindersPage() {
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "critical">("medium");
   const [content, setContent] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [autoGlobal, setAutoGlobal] = useState(false);
+  const [autoDelay, setAutoDelay] = useState(7);
+  const [autoOverrides, setAutoOverrides] = useState<Record<string, boolean>>({});
+  const [autoNextMsg, setAutoNextMsg] = useState<string | null>(null);
 
   useEffect(() => {
     setReminders(ctxReminders);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctxReminders]);
+
+  useEffect(() => {
+    const global = localStorage.getItem("auto_reminder_global");
+    if (global !== null) setAutoGlobal(global === "true");
+    const delay = localStorage.getItem("auto_reminder_delay");
+    if (delay !== null) setAutoDelay(parseInt(delay) || 7);
+    const overrides = localStorage.getItem("auto_reminder_overrides");
+    if (overrides) setAutoOverrides(JSON.parse(overrides));
+  }, []);
+
+  function toggleAutoGlobal() {
+    const next = !autoGlobal;
+    setAutoGlobal(next);
+    localStorage.setItem("auto_reminder_global", String(next));
+  }
+
+  function toggleAutoClient(clientId: string) {
+    const current = autoOverrides[clientId] ?? autoGlobal;
+    const next = { ...autoOverrides, [clientId]: !current };
+    setAutoOverrides(next);
+    localStorage.setItem("auto_reminder_overrides", JSON.stringify(next));
+  }
+
+  function getEffectiveAuto(clientId: string): boolean {
+    return autoOverrides[clientId] ?? autoGlobal;
+  }
 
   // Auto-génération dès qu'une facture est sélectionnée
   useEffect(() => {
@@ -133,14 +166,12 @@ export default function RemindersPage() {
   }
 
   async function markSent(reminder: Reminder) {
-    // Mise à jour optimiste immédiate
     setReminders((prev) =>
       prev.map((r) => r.id === reminder.id ? { ...r, sent_at: new Date().toISOString() } : r)
     );
     try {
       await markReminderSent(reminder.id);
     } catch {
-      // Fallback localStorage
       const all = getRemindersLS();
       const idx = all.findIndex((r) => r.id === reminder.id);
       if (idx >= 0) {
@@ -148,26 +179,122 @@ export default function RemindersPage() {
         saveReminderLS(all[idx]);
       }
     }
+
+    // Auto-relance si activée pour ce client
+    const doc = documents.find((d) => d.id === reminder.document_id);
+    if (!doc) return;
+    if (!getEffectiveAuto(doc.client_id)) return;
+
+    const scheduledDate = new Date();
+    scheduledDate.setDate(scheduledDate.getDate() + autoDelay);
+
+    const existingCount = reminders.filter((r) => r.document_id === doc.id).length;
+    const clientName = getClientName(doc.client_id);
+    const days = doc.due_date ? getDaysOverdue(doc.due_date) : 0;
+    let tone = "amical";
+    if (existingCount >= 2) tone = "mise en demeure";
+    else if (existingCount >= 1) tone = "ferme";
+
+    const templates = {
+      amical: `Bonjour ${clientName},\n\nNous nous permettons de vous rappeler que la facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} est arrivée à échéance depuis ${days} jour(s).\n\nNous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.\n\nCordialement,`,
+      ferme: `${clientName},\n\nMalgré notre précédent rappel, la facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} reste impayée avec un retard de ${days} jours.\n\nNous vous demandons de régulariser cette situation sous 8 jours.\n\nSans réponse de votre part, nous serons contraints d'engager des démarches de recouvrement.\n\nCordialement,`,
+      "mise en demeure": `MISE EN DEMEURE\n\n${clientName},\n\nLa facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} demeure impayée malgré nos ${existingCount} relances précédentes (retard : ${days} jours).\n\nConformément aux articles L.441-10 et suivants du Code de commerce, nous vous mettons en demeure de régler cette somme sous 8 jours.\n\nÀ défaut, des pénalités de retard seront appliquées.\n\nCordialement,`,
+    };
+
+    const nextPriority = existingCount >= 2 ? "critical" as const : existingCount >= 1 ? "high" as const : "medium" as const;
+    const payload = {
+      document_id: doc.id,
+      channel: reminder.channel,
+      priority: nextPriority,
+      content: templates[tone as keyof typeof templates],
+      ai_generated: false,
+      scheduled_for: scheduledDate.toISOString().split("T")[0],
+    };
+
+    try {
+      await saveReminderDB(payload);
+      await refreshReminders();
+    } catch {
+      saveReminderLS(payload);
+    }
+
+    setAutoNextMsg(scheduledDate.toLocaleDateString("fr-FR", { day: "numeric", month: "long" }));
+    setTimeout(() => setAutoNextMsg(null), 5000);
   }
 
   return (
     <PageTransition>
       <Topbar title="Relances" subtitle={`${overdueInvoices.length} facture${overdueInvoices.length > 1 ? "s" : ""} en retard`} />
       <div className="p-6 space-y-6">
-        {/* Overdue alert bar */}
-        {overdueInvoices.length > 0 && (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-red-400/[0.06] border border-red-400/15">
-            <AlertTriangle className="w-5 h-5 text-red-400" />
-            <div className="flex-1">
-              <p className="text-sm font-sans font-medium text-red-400">{overdueInvoices.length} facture{overdueInvoices.length > 1 ? "s" : ""} en retard</p>
-              <p className="text-xs font-sans text-atlantic-200/40">
-                Total : {formatCurrency(overdueInvoices.reduce((s, d) => s + d.total_ttc, 0))}
-              </p>
-            </div>
-            <PremiumButton size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowCreate(true)}>
-              Créer une relance
-            </PremiumButton>
+        {/* Confirmation auto-relance programmée */}
+        {autoNextMsg && (
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gold-400/8 border border-gold-400/20">
+            <Clock className="w-4 h-4 text-gold-400 flex-shrink-0" />
+            <p className="text-sm font-sans text-gold-400">
+              Prochaine relance programmée automatiquement pour le <span className="font-semibold">{autoNextMsg}</span>
+            </p>
           </div>
+        )}
+
+        {/* Overdue alert bar + liste par client */}
+        {overdueInvoices.length > 0 && (
+          <GlassCard hover={false} className="border-red-400/15">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+                <div>
+                  <p className="text-sm font-sans font-semibold text-red-400">{overdueInvoices.length} facture{overdueInvoices.length > 1 ? "s" : ""} en retard</p>
+                  <p className="text-[10px] font-sans text-atlantic-200/40">
+                    Total : {formatCurrency(overdueInvoices.reduce((s, d) => s + d.total_ttc, 0))}
+                  </p>
+                </div>
+              </div>
+              <PremiumButton size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowCreate(true)}>
+                Créer une relance
+              </PremiumButton>
+            </div>
+            <div className="space-y-2">
+              {overdueInvoices.map((doc) => {
+                const effective = getEffectiveAuto(doc.client_id);
+                const isOverride = doc.client_id in autoOverrides;
+                return (
+                  <div key={doc.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-atlantic-800/40 border border-atlantic-600/15 gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-sans font-medium text-white truncate">
+                        {doc.number} — {getClientName(doc.client_id)}
+                      </p>
+                      <p className="text-[10px] font-sans text-atlantic-200/40">
+                        {formatCurrency(doc.total_ttc)} · {getDaysOverdue(doc.due_date!)} j de retard
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <button
+                        onClick={() => { sessionStorage.setItem("open_doc_id", doc.id); router.push("/documents"); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-atlantic-700/50 border border-atlantic-500/20 text-atlantic-200/60 text-xs font-sans hover:text-white hover:border-atlantic-400/40 transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Voir la facture
+                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[10px] font-sans ${effective ? "text-gold-400" : "text-atlantic-200/30"}`}>
+                          Auto{isOverride ? " ✱" : ""}
+                        </span>
+                        <button
+                          onClick={() => toggleAutoClient(doc.client_id)}
+                          className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${effective ? "bg-gold-400" : "bg-atlantic-600/60"}`}
+                        >
+                          <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform duration-200 ${effective ? "translate-x-4" : "translate-x-0.5"}`} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {overdueInvoices.some((d) => d.client_id in autoOverrides) && (
+              <p className="text-[10px] font-sans text-atlantic-200/30 mt-3">✱ Override individuel — différent du réglage global</p>
+            )}
+          </GlassCard>
         )}
 
         {/* Create reminder form */}
@@ -251,10 +378,13 @@ export default function RemindersPage() {
               const doc = documents.find((d) => d.id === reminder.document_id);
               const ChannelIcon = CHANNEL_ICONS[reminder.channel] || Mail;
               return (
-                <GlassCard key={reminder.id} className="!p-4">
+                <GlassCard key={reminder.id} className={`!p-4 ${!reminder.sent_at && reminder.scheduled_for ? "border-gold-400/15" : ""}`}>
                   <div className="flex items-start gap-4">
-                    <div className="p-2 rounded-lg bg-gold-400/10">
-                      <ChannelIcon className="w-5 h-5 text-gold-400" />
+                    <div className={`p-2 rounded-lg ${!reminder.sent_at && reminder.scheduled_for ? "bg-gold-400/8" : "bg-gold-400/10"}`}>
+                      {!reminder.sent_at && reminder.scheduled_for
+                        ? <Clock className="w-5 h-5 text-gold-400/60" />
+                        : <ChannelIcon className="w-5 h-5 text-gold-400" />
+                      }
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -274,15 +404,55 @@ export default function RemindersPage() {
                       <p className="text-[10px] font-sans text-atlantic-200/30 mt-1">
                         {new Date(reminder.created_at).toLocaleString("fr-FR")}
                         {reminder.sent_at && " • Envoyée"}
+                        {!reminder.sent_at && reminder.scheduled_for && (
+                          <span className="text-gold-400/60"> • Programmée le {new Date(reminder.scheduled_for).toLocaleDateString("fr-FR")}</span>
+                        )}
                       </p>
                     </div>
-                    {!reminder.sent_at ? (
-                      <PremiumButton variant="outline" size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => markSent(reminder)}>
-                        Envoyer
-                      </PremiumButton>
-                    ) : (
-                      <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                    )}
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      {doc && (
+                        <button
+                          onClick={() => { sessionStorage.setItem("open_doc_id", doc.id); router.push("/documents"); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-atlantic-700/50 border border-atlantic-500/20 text-atlantic-200/60 text-xs font-sans hover:text-white hover:border-atlantic-400/40 transition-colors"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          Voir la facture
+                        </button>
+                      )}
+                      {!reminder.sent_at && doc && (
+                        <div className="flex items-center gap-1.5">
+                          <Zap className={`w-3 h-3 ${getEffectiveAuto(doc.client_id) ? "text-gold-400" : "text-atlantic-200/20"}`} />
+                          <span className="text-[10px] font-sans text-atlantic-200/40">Auto dans</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={90}
+                            value={autoDelay}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              const v = Math.max(1, Math.min(90, parseInt(e.target.value) || 7));
+                              setAutoDelay(v);
+                              localStorage.setItem("auto_reminder_delay", String(v));
+                            }}
+                            className="w-10 px-1 py-0.5 text-[10px] font-sans font-semibold text-center rounded bg-atlantic-700/60 border border-atlantic-500/20 text-white focus:outline-none focus:border-gold-400/40"
+                          />
+                          <span className="text-[10px] font-sans text-atlantic-200/40">j</span>
+                          <button
+                            onClick={() => toggleAutoClient(doc.client_id)}
+                            className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${getEffectiveAuto(doc.client_id) ? "bg-gold-400" : "bg-atlantic-600/60"}`}
+                          >
+                            <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform duration-200 ${getEffectiveAuto(doc.client_id) ? "translate-x-4" : "translate-x-0.5"}`} />
+                          </button>
+                        </div>
+                      )}
+                      {!reminder.sent_at ? (
+                        <PremiumButton variant="outline" size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => markSent(reminder)}>
+                          Envoyer
+                        </PremiumButton>
+                      ) : (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                      )}
+                    </div>
                   </div>
                 </GlassCard>
               );
