@@ -43,9 +43,20 @@ export interface Ticket {
   read: boolean;
   resolvedAt: string | null;
   supportNotes: string | null;
+  scheduledCheckAt: string | null; // Date de vérification auto après clôture
+
+  // ── Auto-relance ───────────────────────────────────────────────────────────
+  autoRelance: boolean;
+  autoRelanceDelay: number; // jours
 
   // ── Journal d'activité ─────────────────────────────────────────────────────
   activities: TicketActivity[];
+}
+
+// ── ID affiché à l'utilisateur — Child1-TKT-0001 si rouvert ─────────────────
+export function getDisplayId(ticket: Ticket): string {
+  const reopens = (ticket.activities ?? []).filter((a) => a.action === "reopened").length;
+  return reopens === 0 ? ticket.id : `Child${reopens}-${ticket.id}`;
 }
 
 const KEY = "factureasy_tickets";
@@ -102,6 +113,9 @@ export function createTicket(
     read: false,
     resolvedAt: null,
     supportNotes: null,
+    scheduledCheckAt: null,
+    autoRelance: false,
+    autoRelanceDelay: 7,
     activities: [{ timestamp: now, action: "created", note: null }],
   };
   localStorage.setItem(KEY, JSON.stringify([ticket, ...getTickets()]));
@@ -121,13 +135,36 @@ export function resolveTicket(id: string): void {
   const now = new Date().toISOString();
   const tickets = getTickets().map((t) => {
     if (t.id !== id) return t;
+    const delay = t.autoRelanceDelay ?? 7;
+    const scheduledCheckAt = (t.autoRelance ?? false)
+      ? new Date(Date.now() + delay * 86_400_000).toISOString()
+      : null;
     return {
       ...t,
       status: "resolved" as const,
       read: true,
       resolvedAt: now,
+      scheduledCheckAt,
       updatedAt: now,
       activities: [...(t.activities ?? []), { timestamp: now, action: "resolved" as const, note: null }],
+    };
+  });
+  localStorage.setItem(KEY, JSON.stringify(tickets));
+  dispatch();
+}
+
+export function reopenTicket(id: string): void {
+  const now = new Date().toISOString();
+  const tickets = getTickets().map((t) => {
+    if (t.id !== id) return t;
+    return {
+      ...t,
+      status: "open" as const,
+      read: true,
+      resolvedAt: null,
+      scheduledCheckAt: null,
+      updatedAt: now,
+      activities: [...(t.activities ?? []), { timestamp: now, action: "reopened" as const, note: null }],
     };
   });
   localStorage.setItem(KEY, JSON.stringify(tickets));
@@ -149,6 +186,14 @@ export function addTicketActivity(id: string, action: TicketActivityAction, note
       activities: [...(t.activities ?? []), { timestamp: now, action, note: note ?? null }],
     };
   });
+  localStorage.setItem(KEY, JSON.stringify(tickets));
+  dispatch();
+}
+
+export function updateTicketAutoRelance(id: string, enabled: boolean, delay: number): void {
+  const tickets = getTickets().map((t) =>
+    t.id === id ? { ...t, autoRelance: enabled, autoRelanceDelay: delay } : t
+  );
   localStorage.setItem(KEY, JSON.stringify(tickets));
   dispatch();
 }

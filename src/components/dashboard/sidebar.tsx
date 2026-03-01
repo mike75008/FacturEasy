@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Package, FileText, Settings, Bell,
   Activity, Brain, ChevronLeft, LogOut,
-  Menu, X, UserCircle, MessageSquare, BookOpen,
+  Menu, X, UserCircle, MessageSquare, BookOpen, Headphones,
 } from "lucide-react";
 import { useAppContext } from "@/lib/context/app-context";
 import { computeInsights, filterUnseen } from "@/lib/insights";
@@ -23,6 +23,7 @@ const navItems = [
   { href: "/comptabilite", label: "Comptabilité", icon: BookOpen },
   { href: "/assistant", label: "Assistant IA", icon: Brain },
   { href: "/messages", label: "Messages", icon: MessageSquare },
+  { href: "/support", label: "Support", icon: Headphones },
   { href: "/settings", label: "Profil", icon: UserCircle },
   { href: "/parametres", label: "Paramètres", icon: Settings },
 ];
@@ -196,7 +197,7 @@ export function Sidebar() {
                         {insightCount > 9 ? "9+" : insightCount}
                       </span>
                     )}
-                    {item.href === "/messages" && ticketCount > 0 && (
+                    {item.href === "/support" && ticketCount > 0 && (
                       <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-violet-400 flex items-center justify-center text-[8px] font-bold text-white animate-pulse">
                         {ticketCount > 9 ? "9+" : ticketCount}
                       </span>
@@ -217,7 +218,7 @@ export function Sidebar() {
                         {insightCount} alerte{insightCount > 1 ? "s" : ""}
                       </span>
                     )}
-                    {item.href === "/messages" && ticketCount > 0 && (showLabels || isMobile) && (
+                    {item.href === "/support" && ticketCount > 0 && (showLabels || isMobile) && (
                       <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-violet-400/20 text-violet-300">
                         {ticketCount} nouveau{ticketCount > 1 ? "x" : ""}
                       </span>
