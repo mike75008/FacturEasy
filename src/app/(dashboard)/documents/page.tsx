@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Topbar } from "@/components/dashboard/topbar";
 import { GlassCard } from "@/components/premium/glass-card";
 import { PremiumButton } from "@/components/premium/premium-button";
@@ -191,6 +191,18 @@ export default function DocumentsPage() {
   const [numberLoading, setNumberLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Ouvrir un document directement via sessionStorage (depuis /relances ou ailleurs)
+  useEffect(() => {
+    if (documents.length === 0) return;
+    const openId = sessionStorage.getItem("open_doc_id");
+    if (!openId) return;
+    const doc = documents.find((d) => d.id === openId);
+    if (!doc) return;
+    sessionStorage.removeItem("open_doc_id");
+    openDetail(doc);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documents]);
 
   const filtered = useMemo(() => {
     return documents
