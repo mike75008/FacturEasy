@@ -9,6 +9,7 @@ import { computeInsights, markAsSeen } from "@/lib/insights";
 import type { Insight } from "@/lib/insights";
 import { formatCurrency } from "@/lib/utils";
 import { getOrganization } from "@/lib/supabase/data";
+import { createTicket } from "@/lib/tickets";
 
 interface Message {
   role: "user" | "assistant";
@@ -58,6 +59,7 @@ export default function AssistantPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [ticketCreated, setTicketCreated] = useState(false);
   const [orgName, setOrgName] = useState("votre entreprise");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -198,6 +200,22 @@ Réponds en français. Précis, structuré, avec le contexte légal quand c'est 
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  }
+
+  function handleEscalate() {
+    if (messages.length === 0 || ticketCreated) return;
+    const userMessages = messages.filter((m) => m.role === "user");
+    const title = userMessages[0]?.content?.slice(0, 80) || "Problème signalé";
+    const description = userMessages.map((m) => m.content).join(" / ").slice(0, 200);
+    const ticket = createTicket(title, description, messages);
+    setTicketCreated(true);
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content: `Ton incident a été transmis au support.\n\n📋 Numéro de ticket : **${ticket.id}**\n\nConserve ce numéro pour le suivi. Tu peux retrouver l'avancement à tout moment dans Messages (icône en haut à droite). Le support reviendra vers toi dès que possible.`,
+      },
+    ]);
   }
 
   // ── Canal Sam : répondre dans un thread ───────────────────────────────────────
@@ -471,9 +489,24 @@ Réponds en français. Précis, structuré, avec le contexte légal quand c'est 
                   <Send className="w-4 h-4" />
                 </button>
               </div>
-              <p className="text-[10px] font-sans text-atlantic-200/20 mt-2 text-center">
-                Entrée pour envoyer · Maj+Entrée pour nouvelle ligne
-              </p>
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-[10px] font-sans text-atlantic-200/20">
+                  Entrée pour envoyer · Maj+Entrée pour nouvelle ligne
+                </p>
+                {messages.length >= 4 && !ticketCreated && (
+                  <button
+                    onClick={handleEscalate}
+                    className="text-[10px] font-sans text-atlantic-200/40 hover:text-orange-300 transition-colors underline underline-offset-2"
+                  >
+                    Helena ne peut pas résoudre → escalader au support
+                  </button>
+                )}
+                {ticketCreated && (
+                  <span className="text-[10px] font-sans text-emerald-400/60">
+                    ✓ Ticket transmis
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 

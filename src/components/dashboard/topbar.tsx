@@ -6,6 +6,7 @@ import { Bell, Search, MessageSquare, LogOut, ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAppContext } from "@/lib/context/app-context";
 import type { NotificationColor } from "@/lib/supabase/data";
+import { getUnreadCount } from "@/lib/tickets";
 
 interface TopbarProps {
   title: string;
@@ -20,6 +21,13 @@ export function Topbar({ title, subtitle, extra, rightExtra }: TopbarProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
   const [tickerIndex, setTickerIndex] = useState(0);
+  const [unreadTickets, setUnreadTickets] = useState(0);
+
+  useEffect(() => {
+    setUnreadTickets(getUnreadCount());
+    const interval = setInterval(() => setUnreadTickets(getUnreadCount()), 5000);
+    return () => clearInterval(interval);
+  }, []);
   const menuRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -123,9 +131,17 @@ export function Topbar({ title, subtitle, extra, rightExtra }: TopbarProps) {
         >
           <Search className="w-5 h-5" />
         </button>
-        <button className="p-2.5 rounded-xl text-atlantic-200/40 hover:text-gold-400 hover:bg-gold-400/10 transition-all duration-200 relative">
+        <button
+          onClick={() => router.push("/messages")}
+          className="p-2.5 rounded-xl text-atlantic-200/40 hover:text-violet-400 hover:bg-violet-400/10 transition-all duration-200 relative"
+          title="Messages support"
+        >
           <MessageSquare className="w-5 h-5" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-gold-400 rounded-full animate-pulse" />
+          {unreadTickets > 0 && (
+            <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-orange-400 flex items-center justify-center text-[8px] font-bold text-white animate-pulse">
+              {unreadTickets > 9 ? "9+" : unreadTickets}
+            </span>
+          )}
         </button>
         <div className="relative" ref={notifRef}>
           <button

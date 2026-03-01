@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Package, FileText, Settings, Bell,
   Activity, Brain, ChevronLeft, LogOut,
-  Menu, X, UserCircle,
+  Menu, X, UserCircle, MessageSquare,
 } from "lucide-react";
 import { useAppContext } from "@/lib/context/app-context";
 import { computeInsights, filterUnseen } from "@/lib/insights";
@@ -20,6 +20,7 @@ const navItems = [
   { href: "/reminders", label: "Relances", icon: Bell },
   { href: "/monitoring", label: "Monitoring", icon: Activity },
   { href: "/assistant", label: "Assistant IA", icon: Brain },
+  { href: "/messages", label: "Messages", icon: MessageSquare },
   { href: "/settings", label: "Profil", icon: UserCircle },
   { href: "/parametres", label: "Paramètres", icon: Settings },
 ];
