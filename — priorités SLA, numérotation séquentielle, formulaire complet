@@ -1,0 +1,304 @@
+[33mcommit 0cebafa4e5180cb8e9536035f236c72071a87cfa[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m)[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sun Mar 1 02:41:33 2026 +0100
+
+    feat: Messages — refonte deux colonnes, historique tickets, suppression
+
+[33mcommit 443d4553e71bac30b60470f42bb77da70b60e334[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sun Mar 1 02:39:49 2026 +0100
+
+    feat: Messages — refonte deux colonnes, historique tickets, suppression
+    
+    - Interface deux colonnes (liste 380px + fiche détail)
+    - tickets.ts : updatedAt, activities[], deleteTicket, addTicketActivity
+    - testsCroises string|null, typeIncident badge coloré
+    - Timeline horodatée (créé / résolu / note) avec ajout de note manuel
+    - Bouton supprimer sur tout ticket (ouvert ou résolu)
+    - formatDatetime : date + heure complète au format français
+    
+    Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+[33mcommit 2a2b1803cd995fc2aca322cb5b4e512b188073df[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sun Mar 1 01:55:17 2026 +0100
+
+    Tickets : structure étendue + resolvedAt + affichage fiche incident
+
+[33mcommit 12e95afd7761c25425056c9cf669ee460c537f77[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sun Mar 1 00:53:44 2026 +0100
+
+    feat: Sam & Helena — conscience mutuelle et redirection croisée
+
+[33mcommit b184435a15372f1989c9f1eed610a9194535c90e[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 28 21:43:50 2026 +0100
+
+    feat: Assistant IA double canal — pensées proactives ROI + conversation libre
+
+[33mcommit 370ee19972ce7582c617bb0889fa042042603cf9[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 28 17:12:33 2026 +0100
+
+    Analyse IA tableau de bord — panneau explicatif complet
+
+[33mcommit f8fe813208570bac4090dad6b8fd41aa66e9220d[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 28 16:34:17 2026 +0100
+
+    Modifier document + toggle Particulier/Pro + colonne sector active
+
+[33mcommit 0f13cc6c10a5daba04f47253ad7703aa82f76029[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 28 13:47:11 2026 +0100
+
+    Rapports PDF IA + email + 4 types documents + notes IA
+
+[33mcommit b05a3844ba2ac77d8516899d22985697bb4efeb1[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 28 11:57:48 2026 +0100
+
+    extraction IA + wizard unifié Excel/CSV/JSON/PDF
+
+[33mcommit c4ee20fa7f2c6ac2bab9025863a5d8f9e0a155d4[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 28 09:16:55 2026 +0100
+
+    Import IA : wizard Excel/CSV/JSON → clients & produits avec mapping automatique
+
+[33mcommit f7b7e7da0d627b9f4307c7ed25f4ac41fd80188f[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 28 07:35:42 2026 +0100
+
+    Paramètres : page complète — Compte, Abonnement, Notifications, Intégrations, Données
+
+[33mcommit 46be2e5defd16c15d73c6843886861522f5dc2e9[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Fri Feb 27 20:41:37 2026 +0100
+
+    (sidebar + page paramètres) en une fois
+
+[33mcommit 296e501e36cc79546e05a1497fdec93b78c555a4[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Fri Feb 27 20:20:50 2026 +0100
+
+    Sidebar : Profil (icône silhouette) + page Paramètres placeholder
+
+[33mcommit 4737bbf7637bc206fac1748311afcda305b5f0b7[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Fri Feb 27 18:17:26 2026 +0100
+
+    Numérotation : génération du numéro à l'ouverture du formulaire (réservation immédiate)
+
+[33mcommit f9975b556e0da46e76363c603c951d8ee4323a30[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Fri Feb 27 16:40:27 2026 +0100
+
+    Factur-X EN 16931 : XML embarqué dans PDF via pipeline hybride (React-PDF browser + pdf-lib serveur)
+
+[33mcommit 87e8e4bc8fb0f8cc21b1e8919289c5d54c89cfad[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Fri Feb 27 12:47:08 2026 +0100
+
+    fix: relances — documents branchés sur Supabase
+
+[33mcommit 5785082246c28346fc7a0d40a7c9b7ea7dc113c9[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Fri Feb 27 12:31:36 2026 +0100
+
+    fix: renommage complet FacturEasy — landing, sidebar, logo, PDF, IA
+
+[33mcommit ad20926c2d640fd4ccf0db2ab72571db018c3754[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Thu Feb 26 23:58:35 2026 +0100
+
+    feat: ROI — sac vivant avec 4 indicateurs switchables et couleur dynamique
+
+[33mcommit d2d49f2841fc6d8b4c1b778c13f7590bbd2e6265[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Thu Feb 26 22:37:11 2026 +0100
+
+    fix: notifications — dates heure locale + messages précis + vert/violet cohérents
+
+[33mcommit c0c637e84a0c9333ac461b29daa78d39b9836b3f[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Thu Feb 26 20:17:08 2026 +0100
+
+    fix: dates en heure locale + scenarios notifications corrigés
+
+[33mcommit 3ba101f0da55c491b0d8d5b73497b4c8e93db06b[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Thu Feb 26 11:20:24 2026 +0100
+
+    feat: audit_logs — traçabilité automatique créer/modifier/supprimer
+
+[33mcommit 5c434c925499eba941afce86c23c0b2376795fbb[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Thu Feb 26 10:59:19 2026 +0100
+
+    fix: numérotation documents — incrément correct + suppression fallback Promise non attendue
+
+[33mcommit d8f5cf55db029b593462e2f84e8b5aa31bca3418[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Wed Feb 25 04:56:00 2026 +0100
+
+    documents qui ne stoquent plus les factures ni dans doc ni dans supabase
+
+[33mcommit 8ab2ffd471354c5ff27ec91c6680bc4a9df3cbc5[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Tue Feb 24 11:32:33 2026 +0100
+
+    couleurs donut + rotation SVG + fallback localStorage notifs
+
+[33mcommit d6d3bb0b734ae937d7f80f1ef5d8beda1e3409a8[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Mon Feb 23 02:20:48 2026 +0100
+
+    assistant IA mis en rond et profils non alignes
+
+[33mcommit 1cf31c684f68c34288d81a9fa1bbb87ef8584a24[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 21 14:12:22 2026 +0100
+
+    performances lignes + layout rectangles + Donut violet finalisé
+
+[33mcommit 54fc34ce1c610391f5731cb6d3cac383652f7bfb[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 21 13:17:52 2026 +0100
+
+    performances lignes + layout rectangles + Donut violet finalisé
+
+[33mcommit 825caee3439ba8ef8d8c8a15bdeaad74ce27a77f[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 21 12:51:43 2026 +0100
+
+    performances lignes + layout rectangles finalisé
+
+[33mcommit 523898e8b6e2e2f48ac9330ba2589cf24680ff7a[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 21 11:28:35 2026 +0100
+
+    Dashboard : layout 3 rectangles + ROI repositionné
+
+[33mcommit c904271032d0a0b2f79af682199a48dda89cc390[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 21 11:07:04 2026 +0100
+
+    Dashboard : réorganisation layout ROI + Documents récents
+
+[33mcommit cc5915a04cd8fe062ed58be512cba2d896a8a589[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 21 10:32:18 2026 +0100
+
+    Dashboard : animation CA en cascade + Supabase Realtime + indicateur live
+    
+    Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+[33mcommit d61acda85d8fae48981c656af73f7240cfdd2540[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 21 07:23:21 2026 +0100
+
+    Phase 10 : assistant IA contextuel bas-droite + recherche globale redimensionnable
+
+[33mcommit 64058772661d8def500cf8456b39cb7e70320abf[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 21 05:45:32 2026 +0100
+
+    Phase 9 : notifications vivantes avec code couleur par type d'alerte
+
+[33mcommit 425f6cb0f04d2412c067b4a2951ad78200f5ed81[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 21 05:02:59 2026 +0100
+
+    Phase 8 : export PDF premium noir/or avec @react-pdf/renderer
+
+[33mcommit c5d69daed057fdaf5ac24a739faf5c5f1f272135[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 21 04:00:12 2026 +0100
+
+    Phase 7 : authentification réelle Supabase, protection des routes, profil utilisateur topbar
+
+[33mcommit cdd3a28583c90e701f760c4b0a5c63a18281d356[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Sat Feb 21 02:22:17 2026 +0100
+
+    Phase 6 : migration Supabase complete (documents, monitoring, dashboard) + middleware robuste
+
+[33mcommit 84a53f9b6a6087863f1dd166af10b14f8aec5fb6[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Fri Feb 20 20:42:51 2026 +0100
+
+    dernière version opérationnellrelances op
+
+[33mcommit 8edffb0550d19317cd270857cd4b9a7ed4189512[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Fri Feb 20 19:01:15 2026 +0100
+
+    Phase 6 : navigation premium + integration Supabase
+    
+    - Pill glissant avec courbe spring sur la navigation sidebar
+    - Transitions de page fluides
+    - Supabase client, server, middleware, schema SQL complet
+    - Auth login/register branches sur Supabase
+    - Trigger handle_new_user corrige
+    
+    Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+[33mcommit 15d5e1cf3a1511c374e04831e945ff53156f5673[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Fri Feb 20 17:20:19 2026 +0100
+
+    dernière version opérationnelle
+
+[33mcommit 61d54fbe923c49df646a3cd7e7020f2c3a6e414e[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Wed Feb 18 09:24:53 2026 +0100
+
+    Phase 5 : validation N+1, vérification auto, audit trail
+    
+    - Vérification automatique des documents (10 checks : totaux, TVA, mentions, format)
+    - Workflow validation N+1 : approuver/rejeter/demander modifications avec commentaires
+    - Historique des validations affiché dans le détail document
+    - Audit log sur chaque action de validation
+    - Panneau latéral avec résultat vérification auto (vert/rouge par check)
+    - Statut document mis à jour automatiquement après validation
+    
+    Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+[33mcommit 40bc23594c87172a52b77ac459a86e3030d5b189[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Wed Feb 18 09:17:18 2026 +0100
+
+    Phases 1-4 : app fonctionnelle en local avec design premium
+    
+    - Service localStorage complet (simule Supabase, prêt pour le switch)
+    - Settings entreprise : SIRET Luhn temps réel, TVA, IBAN, logo upload, numérotation
+    - CRUD Clients : création pro/particulier, recherche, filtres, fiche détaillée
+    - CRUD Produits : catalogue avec unités dynamiques, TVA multi-taux, catégories
+    - Documents : création facture/devis, lignes dynamiques, sélection catalogue,
+      calcul TVA temps réel, remise globale, numérotation séquentielle, workflow statut
+    - Landing page premium : 5 sections, parallax, compteurs animés, particules
+    - Dashboard : KPIs animés, graphique CA, activité récente, widget ROI
+    - Sidebar : indicateur glissant, animations fluides
+    - Transitions de page Framer Motion sur toutes les vues
+    
+    Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+
+[33mcommit 9b88c5e4efd17e6ff46c81198de5cd694ea28c89[m
+Author: Agbessi <hagbessi@gmail.com>
+Date:   Tue Feb 17 18:27:46 2026 +0100
+
+    Phase 0 : fondations du système de facturation universel
+    
+    - Next.js 15 + TypeScript strict + Tailwind + Framer Motion
+    - Thème premium : bleu atlantique, bordures dorées, Playfair Display
+    - Config Supabase (clients browser/server, middleware auth)
+    - Couche abstraction AI (OpenAI, prêt pour switch Claude)
+    - Schéma SQL complet : 15 tables, RLS, numérotation atomique
+    - Pages auth : login, register, forgot-password
+    - Dashboard avec sidebar animée + 7 pages (clients, produits, documents, settings, relances, monitoring)
+    - Validateurs FR : SIRET (Luhn), TVA, IBAN, mentions légales
+    - API routes IA : chat, relances, analyse risque
+    
+    Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>

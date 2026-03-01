@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useAppContext } from "@/lib/context/app-context";
 import { computeInsights, filterUnseen } from "@/lib/insights";
+import { getUnreadCount } from "@/lib/tickets";
 
 const navItems = [
   { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
@@ -35,6 +36,7 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { documents, clients } = useAppContext();
   const [insightCount, setInsightCount] = useState(0);
+  const [ticketCount, setTicketCount] = useState(0);
 
   useEffect(() => {
     if (!documents.length && !clients.length) return;
@@ -42,6 +44,13 @@ export function Sidebar() {
     const unseen = filterUnseen(all);
     setInsightCount(unseen.length);
   }, [documents, clients]);
+
+  useEffect(() => {
+    setTicketCount(getUnreadCount());
+    function handleUpdate() { setTicketCount(getUnreadCount()); }
+    window.addEventListener("tickets-updated", handleUpdate);
+    return () => window.removeEventListener("tickets-updated", handleUpdate);
+  }, []);
 
   // Refs pour mesurer les positions réelles des items
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -186,6 +195,11 @@ export function Sidebar() {
                         {insightCount > 9 ? "9+" : insightCount}
                       </span>
                     )}
+                    {item.href === "/messages" && ticketCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-violet-400 flex items-center justify-center text-[8px] font-bold text-white animate-pulse">
+                        {ticketCount > 9 ? "9+" : ticketCount}
+                      </span>
+                    )}
                   </div>
 
                   <span
@@ -200,6 +214,11 @@ export function Sidebar() {
                     {item.href === "/assistant" && insightCount > 0 && (showLabels || isMobile) && (
                       <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-400/20 text-red-300">
                         {insightCount} alerte{insightCount > 1 ? "s" : ""}
+                      </span>
+                    )}
+                    {item.href === "/messages" && ticketCount > 0 && (showLabels || isMobile) && (
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-violet-400/20 text-violet-300">
+                        {ticketCount} nouveau{ticketCount > 1 ? "x" : ""}
                       </span>
                     )}
                   </span>

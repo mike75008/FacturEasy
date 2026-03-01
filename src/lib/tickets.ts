@@ -9,11 +9,14 @@ export interface TicketActivity {
   note: string | null;
 }
 
+export type TicketPriority = "critical" | "high" | "normal" | "low";
+
 export interface Ticket {
   id: string;
   createdAt: string;
   updatedAt: string;
   status: "open" | "in_progress" | "resolved";
+  priority: TicketPriority;
 
   // ── Identification ─────────────────────────────────────────────────────────
   title: string;
@@ -27,7 +30,7 @@ export interface Ticket {
 
   // ── Tests réalisés ─────────────────────────────────────────────────────────
   testsRealises: string | null;        // Ce que l'utilisateur a déjà essayé
-  testsCroises: string | null;         // Testé sur un autre navigateur / appareil (ex: "Chrome + Firefox")
+  testsCroises: string | null;         // Testé sur un autre navigateur / appareil
   rebootTente: boolean | null;         // Rechargement de la page tenté
 
   // ── Catégorie ──────────────────────────────────────────────────────────────
@@ -39,13 +42,27 @@ export interface Ticket {
   // ── Suivi ──────────────────────────────────────────────────────────────────
   read: boolean;
   resolvedAt: string | null;
-  supportNotes: string | null;         // Notes internes du support
+  supportNotes: string | null;
 
   // ── Journal d'activité ─────────────────────────────────────────────────────
-  activities: TicketActivity[];        // Historique chronologique des actions
+  activities: TicketActivity[];
 }
 
 const KEY = "factureasy_tickets";
+const COUNTER_KEY = "factureasy_ticket_counter";
+
+// Notifie la sidebar (et tout autre écouteur) qu'un ticket a changé
+function dispatch(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("tickets-updated"));
+  }
+}
+
+function nextTicketId(): string {
+  const n = parseInt(localStorage.getItem(COUNTER_KEY) || "0", 10) + 1;
+  localStorage.setItem(COUNTER_KEY, String(n));
+  return `TKT-${String(n).padStart(4, "0")}`;
+}
 
 export function getTickets(): Ticket[] {
   try {
@@ -60,16 +77,17 @@ export function createTicket(
   userDescription: string,
   conversation: { role: "user" | "assistant"; content: string }[],
   extra?: Partial<Pick<Ticket,
-    "natureIncident" | "commentArrive" | "depuisQuand" |
+    "natureIncident" | "commentArrive" | "depuisQuand" | "priority" |
     "nbPersonnesImpactees" | "testsRealises" | "testsCroises" | "rebootTente" | "typeIncident"
   >>
 ): Ticket {
   const now = new Date().toISOString();
   const ticket: Ticket = {
-    id: `TKT-${Date.now()}`,
+    id: nextTicketId(),
     createdAt: now,
     updatedAt: now,
     status: "open",
+    priority: extra?.priority ?? "normal",
     title,
     userDescription,
     natureIncident: extra?.natureIncident ?? null,
@@ -86,8 +104,8 @@ export function createTicket(
     supportNotes: null,
     activities: [{ timestamp: now, action: "created", note: null }],
   };
-  const existing = getTickets();
-  localStorage.setItem(KEY, JSON.stringify([ticket, ...existing]));
+  localStorage.setItem(KEY, JSON.stringify([ticket, ...getTickets()]));
+  dispatch();
   return ticket;
 }
 
@@ -96,6 +114,7 @@ export function markTicketRead(id: string): void {
     t.id === id ? { ...t, read: true } : t
   );
   localStorage.setItem(KEY, JSON.stringify(tickets));
+  dispatch();
 }
 
 export function resolveTicket(id: string): void {
@@ -112,11 +131,12 @@ export function resolveTicket(id: string): void {
     };
   });
   localStorage.setItem(KEY, JSON.stringify(tickets));
+  dispatch();
 }
 
 export function deleteTicket(id: string): void {
-  const tickets = getTickets().filter((t) => t.id !== id);
-  localStorage.setItem(KEY, JSON.stringify(tickets));
+  localStorage.setItem(KEY, JSON.stringify(getTickets().filter((t) => t.id !== id)));
+  dispatch();
 }
 
 export function addTicketActivity(id: string, action: TicketActivityAction, note?: string): void {
@@ -130,6 +150,7 @@ export function addTicketActivity(id: string, action: TicketActivityAction, note
     };
   });
   localStorage.setItem(KEY, JSON.stringify(tickets));
+  dispatch();
 }
 
 export function getUnreadCount(): number {
