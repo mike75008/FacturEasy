@@ -166,6 +166,40 @@ const emptyLine = (): LineForm => ({
   product_id: null,
 });
 
+function computeTypicalDelay(clientIdArg: string, docs: Doc[]): number | null {
+  const delays = docs
+    .filter((d) => d.client_id === clientIdArg && d.type === "facture" && d.due_date && d.date)
+    .map((d) => Math.round((new Date(d.due_date!).getTime() - new Date(d.date).getTime()) / 86_400_000))
+    .filter((d) => d > 0);
+  if (delays.length < 2) return null;
+  delays.sort((a, b) => a - b);
+  return delays[Math.floor(delays.length / 2)];
+}
+
+function computePaymentBehavior(clientIdArg: string, docs: Doc[]): "excellent" | "bon" | "moyen" | "mauvais" | null {
+  const invoices = docs.filter((d) => d.client_id === clientIdArg && d.type === "facture");
+  if (invoices.length < 2) return null;
+
+  // Données précises : paid_at vs due_date
+  const paidWithDates = invoices.filter((d) => d.status === "paye" && d.paid_at && d.due_date);
+  if (paidWithDates.length >= 2) {
+    const avgDelay = paidWithDates.reduce((sum, d) => {
+      return sum + Math.round((new Date(d.paid_at!).getTime() - new Date(d.due_date!).getTime()) / 86_400_000);
+    }, 0) / paidWithDates.length;
+    if (avgDelay <= 0) return "excellent";
+    if (avgDelay <= 5) return "bon";
+    if (avgDelay <= 15) return "moyen";
+    return "mauvais";
+  }
+
+  // Fallback : ratio factures payées / total
+  const ratio = invoices.filter((d) => d.status === "paye").length / invoices.length;
+  if (ratio >= 0.9) return "excellent";
+  if (ratio >= 0.7) return "bon";
+  if (ratio >= 0.5) return "moyen";
+  return "mauvais";
+}
+
 export default function DocumentsPage() {
   const { documents, clients, products, dataLoading: loading, refreshDocuments } = useAppContext();
   const [search, setSearch] = useState("");
@@ -191,6 +225,8 @@ export default function DocumentsPage() {
   const [numberLoading, setNumberLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastClientDoc, setLastClientDoc] = useState<Doc | null>(null);
+  const [paymentHint, setPaymentHint] = useState("");
 
   // Ouvrir un document directement via sessionStorage (depuis /relances ou ailleurs)
   useEffect(() => {
@@ -242,6 +278,29 @@ export default function DocumentsPage() {
     setDetectedSector(group);
     setSectorValues({});
   }, [clientId, clients]);
+
+  // Pré-remplissage intelligent : dernier doc client + délai d'échéance médian
+  useEffect(() => {
+    if (!clientId || editingDocId) { setLastClientDoc(null); setPaymentHint(""); return; }
+    const clientDocs = documents
+      .filter((d) => d.client_id === clientId)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    setLastClientDoc(clientDocs[0] ?? null);
+    if (docType === "facture") {
+      const delay = computeTypicalDelay(clientId, documents);
+      if (delay !== null && !dueDate) {
+        const d = new Date();
+        d.setDate(d.getDate() + delay);
+        setDueDate(d.toISOString().split("T")[0]);
+        setPaymentHint(`Délai habituel : ${delay} j`);
+      } else if (delay === null) {
+        setPaymentHint("");
+      }
+    } else {
+      setPaymentHint("");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, editingDocId, docType]);
 
   function getClientName(clientIdVal: string): string {
     const c = clients.find((cl) => cl.id === clientIdVal);
@@ -615,19 +674,89 @@ export default function DocumentsPage() {
                           </option>
                         ))}
                       </select>
+                      {clientId && (() => {
+                        const pb = computePaymentBehavior(clientId, documents);
+                        if (!pb) return null;
+                        const colors: Record<string, string> = {
+                          excellent: "bg-emerald-400/10 text-emerald-400 border-emerald-400/20",
+                          bon: "bg-blue-400/10 text-blue-400 border-blue-400/20",
+                          moyen: "bg-amber-400/10 text-amber-400 border-amber-400/20",
+                          mauvais: "bg-red-400/10 text-red-400 border-red-400/20",
+                        };
+                        const labels: Record<string, string> = {
+                          excellent: "Paiement excellent",
+                          bon: "Bon payeur",
+                          moyen: "Paiement moyen",
+                          mauvais: "Mauvais payeur",
+                        };
+                        return (
+                          <span className={`mt-1.5 inline-flex text-[10px] font-sans px-2 py-0.5 rounded-full border ${colors[pb] ?? ""}`}>
+                            {labels[pb] ?? pb}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <PremiumInput label="Date" type="date" value={docDate} onChange={(e) => setDocDate(e.target.value)} />
                     {DOC_TYPE_CONFIG[docType]?.showDueDate && (
-                      <PremiumInput
-                        label={DOC_TYPE_CONFIG[docType]?.dueDateLabel || "Échéance"}
-                        type="date"
-                        value={dueDate}
-                        onChange={(e) => setDueDate(e.target.value)}
-                      />
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-sm font-sans font-medium text-gold-300">
+                            {DOC_TYPE_CONFIG[docType]?.dueDateLabel || "Échéance"}
+                          </label>
+                          {paymentHint && (
+                            <span className="text-[10px] font-sans text-atlantic-200/30">{paymentHint}</span>
+                          )}
+                        </div>
+                        <input
+                          type="date"
+                          value={dueDate}
+                          onChange={(e) => { setDueDate(e.target.value); setPaymentHint(""); }}
+                          className="premium-input w-full"
+                        />
+                      </div>
                     )}
                     <PremiumInput label="Remise globale (%)" type="number" value={String(discountPercent)} onChange={(e) => setDiscountPercent(parseFloat(e.target.value) || 0)} />
                   </div>
                 </GlassCard>
+
+                {/* ─── Bannière "Réutiliser le dernier document" ─── */}
+                {lastClientDoc && (
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-gold-400/[0.03] border border-gold-400/10">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="w-4 h-4 text-gold-400/50 shrink-0" />
+                      <span className="text-xs font-sans text-atlantic-200/60 truncate">
+                        Dernier document · <span className="text-white/70">{lastClientDoc.number}</span> · {formatDateShort(lastClientDoc.date)} · <span className="text-gold-400">{formatCurrency(lastClientDoc.total_ttc)}</span> TTC
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const reusedLines = await getDocumentLinesDB(lastClientDoc.id);
+                            if (reusedLines.length > 0) {
+                              setLines(reusedLines.map((l) => ({
+                                description: l.description,
+                                quantity: l.quantity,
+                                unit: l.unit,
+                                unit_price: l.unit_price,
+                                tva_rate: l.tva_rate,
+                                discount_percent: l.discount_percent || 0,
+                                product_id: l.product_id || null,
+                              })));
+                            }
+                          } catch { /* ignore */ }
+                          setLastClientDoc(null);
+                        }}
+                        className="text-[11px] font-sans font-medium text-gold-400 hover:text-gold-300 px-2.5 py-1 rounded-lg bg-gold-400/10 hover:bg-gold-400/20 border border-gold-400/20 transition-colors"
+                      >
+                        Réutiliser ces lignes
+                      </button>
+                      <button onClick={() => setLastClientDoc(null)} className="text-atlantic-200/30 hover:text-white transition-colors">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <GlassCard hover={false}>
                   <div className="flex items-center justify-between mb-4">
