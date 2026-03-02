@@ -67,7 +67,7 @@ git commit -m "Phase 10 : assistant IA contextuel bas-droite + recherche globale
 
 
  git add .
- git commit -m "feat: CA3 Cerfa, Sam Comptabilité, bon_commande complet"
+ git commit -m "eat: Pré-remplissage intelligent — réutilisation lignes, délai échéance auto, badge comportement paiement"
 
 
 Facture en retard Envoyée mais non payée après date d'échéance -
@@ -89,6 +89,22 @@ Chaque mois tu collectes de la TVA pour le compte de l'État — il faut la lui 
   Pour déposer : impots.gouv.fr → ton espace professionnel → Déclarer → TVA.
 
   Références sur le formulaire : case L.14 = 2 480 € · case L.21 = 240 € · case L.29 (TVA à payer) = 2 240 €
+
+
+---
+  "Sérieusement ? J'ai tout calculé, tout préparé, le montant est là, la case est vide... T'as plus qu'à cliquer et tu
+  fais quoi ? Tu vas créer des devis. Non. On règle ça d'abord."
+
+  "Je dis pas ça pour t'embêter mais ta déclaration TVA est en retard et le fisc lui il plaisante pas. Moi si. Mais là
+  c'est pas le moment."
+
+  "J'ai mis les chiffres sur un plateau, j'ai calculé la TVA, j'ai vérifié les dépenses... T'as 30 secondes pour
+  déclarer. Le reste peut attendre, promis."
+
+  ---
+  Et pour le niveau 1 (bannière J-7, encore sympa) :
+
+  "Hé, ta déclaration TVA dans 5 jours. J'ai tout prêt quand tu veux."
 
 
 

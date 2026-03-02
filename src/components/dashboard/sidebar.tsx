@@ -10,6 +10,7 @@ import {
   Menu, X, UserCircle, MessageSquare, BookOpen, Headphones,
 } from "lucide-react";
 import { useAppContext } from "@/lib/context/app-context";
+import { useDeclarationGuard } from "@/components/dashboard/declaration-guard";
 import { computeInsights, filterUnseen } from "@/lib/insights";
 import { getUnreadCount } from "@/lib/tickets";
 
@@ -37,6 +38,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { documents, clients } = useAppContext();
+  const { level: declarationLevel } = useDeclarationGuard();
   const [insightCount, setInsightCount] = useState(0);
   const [ticketCount, setTicketCount] = useState(0);
 
@@ -201,6 +203,12 @@ export function Sidebar() {
                       <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-violet-400 flex items-center justify-center text-[8px] font-bold text-white animate-pulse">
                         {ticketCount > 9 ? "9+" : ticketCount}
                       </span>
+                    )}
+                    {item.href === "/comptabilite" && declarationLevel >= 1 && (
+                      <span className={cn(
+                        "absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full",
+                        declarationLevel === 2 ? "bg-red-400 animate-pulse" : "bg-amber-400",
+                      )} />
                     )}
                   </div>
 
