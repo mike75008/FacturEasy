@@ -22,6 +22,8 @@ import {
   getOrganization as getOrganizationDB,
 } from "@/lib/supabase/data";
 import { getOrganization as getOrganizationLS } from "@/lib/local-storage";
+import { useDeclarationGuard, ALL_DECL_TYPES } from "@/components/dashboard/declaration-guard";
+import type { DeclarationType } from "@/components/dashboard/declaration-guard";
 import type { Depense, DeclarationTVA, Document, Organization } from "@/types/database";
 
 const MONTH_NAMES = [
@@ -55,6 +57,7 @@ const BLANK_FORM = {
 
 export default function ComptabilitePage() {
   const { documents, clients, depenses, refreshDepenses, dataLoading: loading } = useAppContext();
+  const { level: guardLevel, demoType: guardDemoType, setDemo } = useDeclarationGuard();
   const [org, setOrg] = useState<Organization | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(BLANK_FORM);
@@ -1471,6 +1474,70 @@ export default function ComptabilitePage() {
             >
               <Download className="w-4 h-4" />Télécharger FEC_{activeYear}.txt
             </button>
+          </div>
+        </GlassCard>
+
+        {/* ── Démo garde-fou ── */}
+        <GlassCard hover={false} className="!border-dashed !border-atlantic-600/30">
+          <div className="space-y-4">
+            {/* En-tête */}
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-sans font-semibold text-atlantic-200/40 uppercase tracking-wider mb-0.5">Mode démo · Garde-fou déclaratif</p>
+                <p className="text-xs font-sans text-atlantic-200/30">
+                  {guardLevel === 0
+                    ? "Inactif — aucune déclaration urgente simulée"
+                    : guardLevel === 1
+                    ? `Niveau 1 actif · ${guardDemoType?.toUpperCase().replace("_", " ")} — bannière ambrée visible en haut`
+                    : `Niveau 2 actif · ${guardDemoType?.toUpperCase().replace("_", " ")} — Sam bloque l'accès sur les autres pages`}
+                </p>
+              </div>
+              {guardLevel > 0 && (
+                <button
+                  onClick={() => setDemo(0)}
+                  className="text-xs font-sans px-3 py-1.5 rounded-lg border bg-atlantic-800/40 border-atlantic-600/20 text-atlantic-200/40 hover:text-white hover:border-atlantic-400/30 transition-colors shrink-0"
+                >
+                  Désactiver
+                </button>
+              )}
+            </div>
+
+            {/* Grille par type */}
+            <div className="grid gap-2">
+              {ALL_DECL_TYPES.map(({ type, label, external, companyOnly }) => {
+                const isActiveType = guardDemoType === type && guardLevel > 0;
+                const orgIsCompany = /\b(sas|sasu|sarl|eurl|sa|sca|scs|snc|sci)\b/i.test(org?.legal_form ?? "");
+                const irrelevant = companyOnly && org && !orgIsCompany;
+                const externalHost = type === "greffe" ? "infogreffe.fr" : "impots.gouv.fr";
+                return (
+                  <div key={type} className={`flex items-center gap-3 py-2 px-3 rounded-lg border transition-colors ${isActiveType ? "bg-atlantic-800/40 border-atlantic-600/20" : "bg-atlantic-800/20 border-atlantic-600/10"}`}>
+                    <div className="flex-1 min-w-0">
+                      <span className={`text-xs font-sans font-medium ${irrelevant ? "text-atlantic-200/25" : "text-atlantic-200/60"}`}>{label}</span>
+                      {external && <span className="ml-2 text-[10px] text-atlantic-200/20">{externalHost}</span>}
+                      {companyOnly && <span className="ml-2 text-[10px] text-atlantic-200/20 italic">société</span>}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => setDemo(1, type as DeclarationType)}
+                        className={`text-[11px] font-sans px-2.5 py-1 rounded-md border transition-colors ${isActiveType && guardLevel === 1 ? "bg-amber-400/20 border-amber-400/40 text-amber-300" : "bg-atlantic-800/40 border-atlantic-600/20 text-atlantic-200/30 hover:text-amber-400 hover:border-amber-400/30"}`}
+                      >
+                        Niv. 1
+                      </button>
+                      <button
+                        onClick={() => setDemo(2, type as DeclarationType)}
+                        className={`text-[11px] font-sans px-2.5 py-1 rounded-md border transition-colors ${isActiveType && guardLevel === 2 ? "bg-red-400/20 border-red-400/40 text-red-300" : "bg-atlantic-800/40 border-atlantic-600/20 text-atlantic-200/30 hover:text-red-400 hover:border-red-400/30"}`}
+                      >
+                        Niv. 2
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="text-[10px] font-sans text-atlantic-200/20">
+              Niv. 1 = bannière ambrée · Niv. 2 = blocage Sam sur toutes les pages sauf cette page
+            </p>
           </div>
         </GlassCard>
 
