@@ -49,11 +49,14 @@ export default function RemindersPage() {
   const [autoDelays, setAutoDelays] = useState<number[]>([7, 14, 30]);
   const [autoOverrides, setAutoOverrides] = useState<Record<string, boolean>>({});
   const [autoNextMsg, setAutoNextMsg] = useState<string | null>(null);
-  // Délai personnalisé par relance (clé = reminder.id) — écrase le global pour cette relance
+  // Délai et ton personnalisés par relance (clé = reminder.id)
   const [nextDelayOverrides, setNextDelayOverrides] = useState<Record<string, number>>({});
+  const [nextToneOverrides, setNextToneOverrides] = useState<Record<string, string>>({});
 
   const AUTO_TONES = ["amical", "ferme", "mise en demeure"] as const;
   type Tone = typeof AUTO_TONES[number];
+  const TONE_LABELS: Record<string, string> = { amical: "Amical", ferme: "Ferme", "mise en demeure": "Mise en demeure" };
+  const TONE_COLORS: Record<string, string> = { amical: "blue", ferme: "amber", "mise en demeure": "red" };
 
   useEffect(() => {
     setReminders(ctxReminders);
@@ -170,6 +173,22 @@ export default function RemindersPage() {
     setSelectedDocId("");
   }
 
+  async function quickCreateReminder(doc: Doc) {
+    const existingCount = reminders.filter(r => r.document_id === doc.id).length;
+    const tone = AUTO_TONES[Math.min(existingCount, AUTO_TONES.length - 1)];
+    const clientName = getClientName(doc.client_id);
+    const days = doc.due_date ? getDaysOverdue(doc.due_date) : 0;
+    const templates: Record<string, string> = {
+      amical: `Bonjour ${clientName},\n\nNous nous permettons de vous rappeler que la facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} est arrivée à échéance depuis ${days} jour(s).\n\nNous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.\n\nCordialement,`,
+      ferme: `${clientName},\n\nMalgré notre précédent rappel, la facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} reste impayée avec un retard de ${days} jours.\n\nNous vous demandons de régulariser cette situation sous 8 jours.\n\nCordialement,`,
+      "mise en demeure": `MISE EN DEMEURE\n\n${clientName},\n\nLa facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} demeure impayée malgré nos ${existingCount} relances précédentes (retard : ${days} jours).\n\nNous vous mettons en demeure de régler cette somme sous 8 jours.\n\nCordialement,`,
+    };
+    const nextPriority = existingCount >= 2 ? "critical" as const : existingCount >= 1 ? "high" as const : "medium" as const;
+    const payload = { document_id: doc.id, channel: "email" as const, priority: nextPriority, content: templates[tone] ?? templates.amical, ai_generated: false };
+    try { await saveReminderDB(payload); await refreshReminders(); }
+    catch { saveReminderLS(payload); }
+  }
+
   async function markSent(reminder: Reminder) {
     setReminders((prev) =>
       prev.map((r) => r.id === reminder.id ? { ...r, sent_at: new Date().toISOString() } : r)
@@ -201,7 +220,7 @@ export default function RemindersPage() {
 
     const clientName = getClientName(doc.client_id);
     const days = doc.due_date ? getDaysOverdue(doc.due_date) : 0;
-    const tone = AUTO_TONES[Math.min(existingCount, AUTO_TONES.length - 1)];
+    const tone = (nextToneOverrides[reminder.id] as Tone | undefined) ?? AUTO_TONES[Math.min(existingCount, AUTO_TONES.length - 1)];
 
     const templates: Record<string, string> = {
       amical: `Bonjour ${clientName},\n\nNous nous permettons de vous rappeler que la facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} est arrivée à échéance depuis ${days} jour(s).\n\nNous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.\n\nCordialement,`,
@@ -344,15 +363,24 @@ export default function RemindersPage() {
                         <ExternalLink className="w-3 h-3" />
                         Voir la facture
                       </button>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-[10px] font-sans ${effective ? "text-gold-400" : "text-atlantic-200/30"}`}>
-                          Auto{isOverride ? " ✱" : ""}
-                        </span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[10px] font-sans ${effective ? "text-gold-400" : "text-atlantic-200/30"}`}>
+                            Auto{isOverride ? " ✱" : ""}
+                          </span>
+                          <button
+                            onClick={() => toggleAutoClient(doc.client_id)}
+                            className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${effective ? "bg-gold-400" : "bg-atlantic-600/60"}`}
+                          >
+                            <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform duration-200 ${effective ? "translate-x-4" : "translate-x-0.5"}`} />
+                          </button>
+                        </div>
                         <button
-                          onClick={() => toggleAutoClient(doc.client_id)}
-                          className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${effective ? "bg-gold-400" : "bg-atlantic-600/60"}`}
+                          onClick={() => quickCreateReminder(doc)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gold-400/10 border border-gold-400/20 text-gold-400 text-xs font-sans font-medium hover:bg-gold-400/20 hover:border-gold-400/40 transition-colors"
                         >
-                          <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform duration-200 ${effective ? "translate-x-4" : "translate-x-0.5"}`} />
+                          <Send className="w-3 h-3" />
+                          Mettre à jour
                         </button>
                       </div>
                     </div>
@@ -499,6 +527,8 @@ export default function RemindersPage() {
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-2 flex-shrink-0">
+
+                      {/* 1. Voir la facture */}
                       {doc && (
                         <button
                           onClick={() => { sessionStorage.setItem("open_doc_id", doc.id); router.push("/documents"); }}
@@ -509,53 +539,60 @@ export default function RemindersPage() {
                         </button>
                       )}
 
-                      {/* Bloc Auto + étape suivante — visible sur toute relance non envoyée */}
+                      {/* 2. Auto toggle */}
                       {!reminder.sent_at && doc && (
-                        <div className="rounded-lg bg-atlantic-800/30 border border-atlantic-600/15 px-3 py-2 space-y-1.5 min-w-[180px]">
-                          <div className="flex items-center gap-1.5">
-                            <Zap className={`w-3 h-3 ${isAutoOn ? "text-gold-400" : "text-atlantic-200/20"}`} />
-                            <span className="text-[10px] font-sans text-atlantic-200/40">Auto</span>
-                            <button
-                              onClick={() => toggleAutoClient(doc.client_id)}
-                              className={`relative w-7 h-3.5 rounded-full transition-colors duration-200 ${isAutoOn ? "bg-gold-400" : "bg-atlantic-600/60"}`}
-                            >
-                              <span className={`absolute top-0.5 w-2.5 h-2.5 bg-white rounded-full shadow transition-transform duration-200 ${isAutoOn ? "translate-x-3.5" : "translate-x-0.5"}`} />
-                            </button>
-                          </div>
-                          {isAutoOn && hasNext && (
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[10px] font-sans text-atlantic-200/30">Suivante :</span>
-                              <span className={`text-[10px] font-sans font-medium ${toneColor}`}>{toneLabel}</span>
-                              <span className="text-[10px] font-sans text-atlantic-200/30">dans</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={180}
-                                value={effectiveDelay}
-                                onClick={(e) => e.stopPropagation()}
-                                onChange={(e) => {
-                                  const v = Math.max(1, Math.min(180, parseInt(e.target.value) || 1));
-                                  setNextDelayOverrides(prev => ({ ...prev, [reminder.id]: v }));
-                                }}
-                                className="w-10 px-1 py-0.5 text-[10px] font-sans font-semibold text-center rounded bg-atlantic-700/60 border border-atlantic-500/20 text-white focus:outline-none focus:border-gold-400/40"
-                              />
-                              <span className="text-[10px] font-sans text-atlantic-200/30">j</span>
-                              {nextDelayOverrides[reminder.id] !== undefined && (
-                                <button
-                                  onClick={() => setNextDelayOverrides(prev => { const n = { ...prev }; delete n[reminder.id]; return n; })}
-                                  className="text-[10px] font-sans text-atlantic-200/25 hover:text-atlantic-200/60 transition-colors"
-                                >
-                                  reset
-                                </button>
-                              )}
-                            </div>
-                          )}
-                          {isAutoOn && !hasNext && (
-                            <p className="text-[10px] font-sans text-red-400/50">Dernière étape</p>
-                          )}
+                        <div className="flex items-center gap-1.5">
+                          <Zap className={`w-3 h-3 ${isAutoOn ? "text-gold-400" : "text-atlantic-200/20"}`} />
+                          <span className="text-[10px] font-sans text-atlantic-200/40">Auto</span>
+                          <button
+                            onClick={() => toggleAutoClient(doc.client_id)}
+                            className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${isAutoOn ? "bg-gold-400" : "bg-atlantic-600/60"}`}
+                          >
+                            <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform duration-200 ${isAutoOn ? "translate-x-4" : "translate-x-0.5"}`} />
+                          </button>
                         </div>
                       )}
 
+                      {/* 3. Badges ton + variateur jours */}
+                      {!reminder.sent_at && (
+                        <div className="flex items-center gap-1 flex-wrap justify-end">
+                          {AUTO_TONES.map((t) => {
+                            const activeTone = nextToneOverrides[reminder.id] ?? nextTone;
+                            const isActive = t === activeTone;
+                            const c = TONE_COLORS[t];
+                            return (
+                              <button
+                                key={t}
+                                onClick={() => setNextToneOverrides(prev => ({ ...prev, [reminder.id]: t }))}
+                                className={`text-[10px] font-sans font-medium px-2 py-0.5 rounded-full border transition-colors ${
+                                  isActive
+                                    ? c === "blue"   ? "bg-blue-400/20 border-blue-400/40 text-blue-300"
+                                    : c === "amber"  ? "bg-amber-400/20 border-amber-400/40 text-amber-300"
+                                    : "bg-red-400/20 border-red-400/40 text-red-300"
+                                    : "bg-atlantic-800/40 border-atlantic-600/20 text-atlantic-200/30 hover:text-white hover:border-atlantic-400/30"
+                                }`}
+                              >
+                                {TONE_LABELS[t]}
+                              </button>
+                            );
+                          })}
+                          <input
+                            type="number"
+                            min={1}
+                            max={180}
+                            value={effectiveDelay}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              const v = Math.max(1, Math.min(180, parseInt(e.target.value) || 1));
+                              setNextDelayOverrides(prev => ({ ...prev, [reminder.id]: v }));
+                            }}
+                            className="w-10 px-1 py-0.5 text-[10px] font-sans font-semibold text-center rounded bg-atlantic-700/60 border border-atlantic-500/20 text-white focus:outline-none focus:border-gold-400/40"
+                          />
+                          <span className="text-[10px] font-sans text-atlantic-200/30">j</span>
+                        </div>
+                      )}
+
+                      {/* 4. Envoyer / Envoyée */}
                       {!reminder.sent_at ? (
                         <PremiumButton variant="outline" size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => markSent(reminder)}>
                           Envoyer
