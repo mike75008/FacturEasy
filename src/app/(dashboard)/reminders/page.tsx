@@ -446,6 +446,21 @@ export default function RemindersPage() {
             {reminders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((reminder) => {
               const doc = documents.find((d) => d.id === reminder.document_id);
               const ChannelIcon = CHANNEL_ICONS[reminder.channel] || Mail;
+
+              // Calculs étape — faits ici, hors JSX
+              const docReminders = reminders.filter(r => r.document_id === reminder.document_id);
+              const stepIndex = docReminders.findIndex(r => r.id === reminder.id);
+              const stepNum = stepIndex + 1;
+              const nextStepIndex = stepIndex + 1;
+              const hasNext = nextStepIndex < autoDelays.length;
+              const nextTone = AUTO_TONES[Math.min(nextStepIndex, AUTO_TONES.length - 1)];
+              const TONE_LABELS: Record<string, string> = { amical: "Rappel amical", ferme: "Relance ferme", "mise en demeure": "Mise en demeure" };
+              const TONE_COLORS: Record<string, string> = { amical: "text-blue-400", ferme: "text-amber-400", "mise en demeure": "text-red-400" };
+              const toneLabel = TONE_LABELS[nextTone] ?? nextTone;
+              const toneColor = TONE_COLORS[nextTone] ?? "text-atlantic-200/60";
+              const effectiveDelay = nextDelayOverrides[reminder.id] ?? autoDelays[nextStepIndex] ?? autoDelays[autoDelays.length - 1];
+              const isAutoOn = doc ? getEffectiveAuto(doc.client_id) : false;
+
               return (
                 <GlassCard key={reminder.id} className={`!p-4 ${!reminder.sent_at && reminder.scheduled_for ? "border-gold-400/15" : ""}`}>
                   <div className="flex items-start gap-4">
@@ -468,15 +483,11 @@ export default function RemindersPage() {
                             <Sparkles className="w-2.5 h-2.5" /> IA
                           </span>
                         )}
-                        {doc && (() => {
-                          const docReminders = reminders.filter(r => r.document_id === reminder.document_id);
-                          const stepNum = docReminders.findIndex(r => r.id === reminder.id) + 1;
-                          if (stepNum > 0) return (
-                            <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-atlantic-700/60 text-atlantic-200/40">
-                              Relance {stepNum}/{autoDelays.length}
-                            </span>
-                          );
-                        })()}
+                        {stepNum > 0 && (
+                          <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-atlantic-700/60 text-atlantic-200/40">
+                            Relance {stepNum}/{autoDelays.length}
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs font-sans text-atlantic-200/50 line-clamp-2 whitespace-pre-line">{reminder.content}</p>
                       <p className="text-[10px] font-sans text-atlantic-200/30 mt-1">
@@ -497,63 +508,54 @@ export default function RemindersPage() {
                           Voir la facture
                         </button>
                       )}
-                      {!reminder.sent_at && doc && (() => {
-                        const docReminders = reminders.filter(r => r.document_id === reminder.document_id);
-                        const stepIndex = docReminders.findIndex(r => r.id === reminder.id);
-                        const nextStepIndex = stepIndex + 1;
-                        const hasNext = nextStepIndex < autoDelays.length;
-                        const nextTone = AUTO_TONES[Math.min(nextStepIndex, AUTO_TONES.length - 1)];
-                        const toneLabel = { amical: "Rappel amical", ferme: "Relance ferme", "mise en demeure": "Mise en demeure" }[nextTone];
-                        const toneColor = { amical: "text-blue-400", ferme: "text-amber-400", "mise en demeure": "text-red-400" }[nextTone];
-                        const effectiveDelay = nextDelayOverrides[reminder.id] ?? autoDelays[nextStepIndex] ?? autoDelays[autoDelays.length - 1];
-                        return (
-                          <div className="w-full rounded-lg bg-atlantic-800/30 border border-atlantic-600/15 px-3 py-2 space-y-1.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5">
-                                <Zap className={`w-3 h-3 ${getEffectiveAuto(doc.client_id) ? "text-gold-400" : "text-atlantic-200/20"}`} />
-                                <span className="text-[10px] font-sans text-atlantic-200/40">Auto</span>
-                                <button
-                                  onClick={() => toggleAutoClient(doc.client_id)}
-                                  className={`relative w-7 h-3.5 rounded-full transition-colors duration-200 ${getEffectiveAuto(doc.client_id) ? "bg-gold-400" : "bg-atlantic-600/60"}`}
-                                >
-                                  <span className={`absolute top-0.5 w-2.5 h-2.5 bg-white rounded-full shadow transition-transform duration-200 ${getEffectiveAuto(doc.client_id) ? "translate-x-3.5" : "translate-x-0.5"}`} />
-                                </button>
-                              </div>
-                            </div>
-                            {hasNext && getEffectiveAuto(doc.client_id) && (
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-[10px] font-sans text-atlantic-200/30">Suivante :</span>
-                                <span className={`text-[10px] font-sans font-medium ${toneColor}`}>{toneLabel}</span>
-                                <span className="text-[10px] font-sans text-atlantic-200/30">dans</span>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={180}
-                                  value={effectiveDelay}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => {
-                                    const v = Math.max(1, Math.min(180, parseInt(e.target.value) || 1));
-                                    setNextDelayOverrides(prev => ({ ...prev, [reminder.id]: v }));
-                                  }}
-                                  className="w-10 px-1 py-0.5 text-[10px] font-sans font-semibold text-center rounded bg-atlantic-700/60 border border-atlantic-500/20 text-white focus:outline-none focus:border-gold-400/40"
-                                />
-                                <span className="text-[10px] font-sans text-atlantic-200/30">j</span>
-                                {nextDelayOverrides[reminder.id] !== undefined && (
-                                  <button
-                                    onClick={() => setNextDelayOverrides(prev => { const n = {...prev}; delete n[reminder.id]; return n; })}
-                                    className="text-[10px] font-sans text-atlantic-200/25 hover:text-atlantic-200/60 transition-colors"
-                                  >
-                                    reset
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                            {!hasNext && (
-                              <p className="text-[10px] font-sans text-red-400/50">Dernière étape — pas de relance suivante</p>
-                            )}
+
+                      {/* Bloc Auto + étape suivante — visible sur toute relance non envoyée */}
+                      {!reminder.sent_at && doc && (
+                        <div className="rounded-lg bg-atlantic-800/30 border border-atlantic-600/15 px-3 py-2 space-y-1.5 min-w-[180px]">
+                          <div className="flex items-center gap-1.5">
+                            <Zap className={`w-3 h-3 ${isAutoOn ? "text-gold-400" : "text-atlantic-200/20"}`} />
+                            <span className="text-[10px] font-sans text-atlantic-200/40">Auto</span>
+                            <button
+                              onClick={() => toggleAutoClient(doc.client_id)}
+                              className={`relative w-7 h-3.5 rounded-full transition-colors duration-200 ${isAutoOn ? "bg-gold-400" : "bg-atlantic-600/60"}`}
+                            >
+                              <span className={`absolute top-0.5 w-2.5 h-2.5 bg-white rounded-full shadow transition-transform duration-200 ${isAutoOn ? "translate-x-3.5" : "translate-x-0.5"}`} />
+                            </button>
                           </div>
-                        );
-                      })()}
+                          {isAutoOn && hasNext && (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[10px] font-sans text-atlantic-200/30">Suivante :</span>
+                              <span className={`text-[10px] font-sans font-medium ${toneColor}`}>{toneLabel}</span>
+                              <span className="text-[10px] font-sans text-atlantic-200/30">dans</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={180}
+                                value={effectiveDelay}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  const v = Math.max(1, Math.min(180, parseInt(e.target.value) || 1));
+                                  setNextDelayOverrides(prev => ({ ...prev, [reminder.id]: v }));
+                                }}
+                                className="w-10 px-1 py-0.5 text-[10px] font-sans font-semibold text-center rounded bg-atlantic-700/60 border border-atlantic-500/20 text-white focus:outline-none focus:border-gold-400/40"
+                              />
+                              <span className="text-[10px] font-sans text-atlantic-200/30">j</span>
+                              {nextDelayOverrides[reminder.id] !== undefined && (
+                                <button
+                                  onClick={() => setNextDelayOverrides(prev => { const n = { ...prev }; delete n[reminder.id]; return n; })}
+                                  className="text-[10px] font-sans text-atlantic-200/25 hover:text-atlantic-200/60 transition-colors"
+                                >
+                                  reset
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {isAutoOn && !hasNext && (
+                            <p className="text-[10px] font-sans text-red-400/50">Dernière étape</p>
+                          )}
+                        </div>
+                      )}
+
                       {!reminder.sent_at ? (
                         <PremiumButton variant="outline" size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => markSent(reminder)}>
                           Envoyer
