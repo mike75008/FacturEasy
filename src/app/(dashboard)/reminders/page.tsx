@@ -46,9 +46,12 @@ export default function RemindersPage() {
   const [content, setContent] = useState("");
   const [generating, setGenerating] = useState(false);
   const [autoGlobal, setAutoGlobal] = useState(false);
-  const [autoDelay, setAutoDelay] = useState(7);
+  const [autoDelays, setAutoDelays] = useState<number[]>([7, 14, 30]);
   const [autoOverrides, setAutoOverrides] = useState<Record<string, boolean>>({});
   const [autoNextMsg, setAutoNextMsg] = useState<string | null>(null);
+
+  const AUTO_TONES = ["amical", "ferme", "mise en demeure"] as const;
+  type Tone = typeof AUTO_TONES[number];
 
   useEffect(() => {
     setReminders(ctxReminders);
@@ -58,8 +61,8 @@ export default function RemindersPage() {
   useEffect(() => {
     const global = localStorage.getItem("auto_reminder_global");
     if (global !== null) setAutoGlobal(global === "true");
-    const delay = localStorage.getItem("auto_reminder_delay");
-    if (delay !== null) setAutoDelay(parseInt(delay) || 7);
+    const delays = localStorage.getItem("auto_reminder_delays");
+    if (delays) { try { setAutoDelays(JSON.parse(delays)); } catch {} }
     const overrides = localStorage.getItem("auto_reminder_overrides");
     if (overrides) setAutoOverrides(JSON.parse(overrides));
   }, []);
@@ -185,17 +188,20 @@ export default function RemindersPage() {
     if (!doc) return;
     if (!getEffectiveAuto(doc.client_id)) return;
 
-    const scheduledDate = new Date();
-    scheduledDate.setDate(scheduledDate.getDate() + autoDelay);
-
     const existingCount = reminders.filter((r) => r.document_id === doc.id).length;
+
+    // Stop si max atteint
+    if (existingCount >= autoDelays.length) return;
+
+    const delay = autoDelays[existingCount] ?? autoDelays[autoDelays.length - 1];
+    const scheduledDate = new Date();
+    scheduledDate.setDate(scheduledDate.getDate() + delay);
+
     const clientName = getClientName(doc.client_id);
     const days = doc.due_date ? getDaysOverdue(doc.due_date) : 0;
-    let tone = "amical";
-    if (existingCount >= 2) tone = "mise en demeure";
-    else if (existingCount >= 1) tone = "ferme";
+    const tone = AUTO_TONES[Math.min(existingCount, AUTO_TONES.length - 1)];
 
-    const templates = {
+    const templates: Record<string, string> = {
       amical: `Bonjour ${clientName},\n\nNous nous permettons de vous rappeler que la facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} est arrivée à échéance depuis ${days} jour(s).\n\nNous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.\n\nCordialement,`,
       ferme: `${clientName},\n\nMalgré notre précédent rappel, la facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} reste impayée avec un retard de ${days} jours.\n\nNous vous demandons de régulariser cette situation sous 8 jours.\n\nSans réponse de votre part, nous serons contraints d'engager des démarches de recouvrement.\n\nCordialement,`,
       "mise en demeure": `MISE EN DEMEURE\n\n${clientName},\n\nLa facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} demeure impayée malgré nos ${existingCount} relances précédentes (retard : ${days} jours).\n\nConformément aux articles L.441-10 et suivants du Code de commerce, nous vous mettons en demeure de régler cette somme sous 8 jours.\n\nÀ défaut, des pénalités de retard seront appliquées.\n\nCordialement,`,
@@ -206,7 +212,7 @@ export default function RemindersPage() {
       document_id: doc.id,
       channel: reminder.channel,
       priority: nextPriority,
-      content: templates[tone as keyof typeof templates],
+      content: templates[tone] ?? templates.amical,
       ai_generated: false,
       scheduled_for: scheduledDate.toISOString().split("T")[0],
     };
@@ -218,8 +224,9 @@ export default function RemindersPage() {
       saveReminderLS(payload);
     }
 
-    setAutoNextMsg(scheduledDate.toLocaleDateString("fr-FR", { day: "numeric", month: "long" }));
-    setTimeout(() => setAutoNextMsg(null), 5000);
+    const toneLabel = { amical: "Rappel amical", ferme: "Relance ferme", "mise en demeure": "Mise en demeure" }[tone] ?? tone;
+    setAutoNextMsg(`${toneLabel} programmée pour le ${scheduledDate.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}`);
+    setTimeout(() => setAutoNextMsg(null), 6000);
   }
 
   return (
@@ -235,6 +242,56 @@ export default function RemindersPage() {
             </p>
           </div>
         )}
+
+        {/* ── Cadence Sam ── */}
+        <GlassCard hover={false}>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-3">
+                <Zap className="w-4 h-4 text-gold-400" />
+                <p className="text-sm font-sans font-semibold text-white">Cadence de relances automatiques</p>
+                <button
+                  onClick={toggleAutoGlobal}
+                  className={`relative w-8 h-4 rounded-full transition-colors duration-200 ml-auto ${autoGlobal ? "bg-gold-400" : "bg-atlantic-600/60"}`}
+                >
+                  <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform duration-200 ${autoGlobal ? "translate-x-4" : "translate-x-0.5"}`} />
+                </button>
+                <span className={`text-xs font-sans ${autoGlobal ? "text-gold-400" : "text-atlantic-200/40"}`}>{autoGlobal ? "Activé" : "Désactivé"}</span>
+              </div>
+              <div className="space-y-2">
+                {autoDelays.map((delay, i) => {
+                  const toneLabel = ["Rappel amical", "Relance ferme", "Mise en demeure"][i] ?? "Relance";
+                  const toneColor = ["text-blue-400", "text-amber-400", "text-red-400"][i] ?? "text-atlantic-200/60";
+                  return (
+                    <div key={i} className="flex items-center gap-3">
+                      <span className="text-[10px] font-sans text-atlantic-200/30 w-4">{i + 1}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-sans text-atlantic-200/40">J+</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={180}
+                          value={delay}
+                          onChange={(e) => {
+                            const v = Math.max(1, Math.min(180, parseInt(e.target.value) || 1));
+                            const next = [...autoDelays];
+                            next[i] = v;
+                            setAutoDelays(next);
+                            localStorage.setItem("auto_reminder_delays", JSON.stringify(next));
+                          }}
+                          className="w-12 px-1.5 py-0.5 text-xs font-sans font-semibold text-center rounded-md bg-atlantic-700/60 border border-atlantic-500/20 text-white focus:outline-none focus:border-gold-400/40"
+                        />
+                      </div>
+                      <span className={`text-xs font-sans font-medium ${toneColor}`}>{toneLabel}</span>
+                      {i > 0 && <span className="text-[10px] font-sans text-atlantic-200/20">depuis étape {i}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] font-sans text-atlantic-200/25 mt-3">{autoDelays.length} relances maximum · arrêt automatique ensuite</p>
+            </div>
+          </div>
+        </GlassCard>
 
         {/* Overdue alert bar + liste par client */}
         {overdueInvoices.length > 0 && (
@@ -257,14 +314,24 @@ export default function RemindersPage() {
               {overdueInvoices.map((doc) => {
                 const effective = getEffectiveAuto(doc.client_id);
                 const isOverride = doc.client_id in autoOverrides;
+                const sentCount = reminders.filter(r => r.document_id === doc.id && r.sent_at).length;
+                const maxReached = sentCount >= autoDelays.length;
                 return (
-                  <div key={doc.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-atlantic-800/40 border border-atlantic-600/15 gap-3">
+                  <div key={doc.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg border gap-3 ${maxReached ? "bg-red-400/5 border-red-400/15" : "bg-atlantic-800/40 border-atlantic-600/15"}`}>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-sans font-medium text-white truncate">
-                        {doc.number} — {getClientName(doc.client_id)}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-sans font-medium text-white truncate">
+                          {doc.number} — {getClientName(doc.client_id)}
+                        </p>
+                        {maxReached && (
+                          <span className="shrink-0 text-[10px] font-sans font-semibold px-2 py-0.5 rounded-full bg-red-400/15 text-red-400 border border-red-400/20">
+                            Contentieux
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[10px] font-sans text-atlantic-200/40">
                         {formatCurrency(doc.total_ttc)} · {getDaysOverdue(doc.due_date!)} j de retard
+                        {sentCount > 0 && ` · ${sentCount}/${autoDelays.length} relance${sentCount > 1 ? "s" : ""} envoyée${sentCount > 1 ? "s" : ""}`}
                       </p>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
@@ -387,7 +454,7 @@ export default function RemindersPage() {
                       }
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <p className="text-sm font-sans font-medium text-white">
                           {doc ? `${doc.number} - ${getClientName(doc.client_id)}` : "Document"}
                         </p>
@@ -399,6 +466,15 @@ export default function RemindersPage() {
                             <Sparkles className="w-2.5 h-2.5" /> IA
                           </span>
                         )}
+                        {doc && (() => {
+                          const docReminders = reminders.filter(r => r.document_id === reminder.document_id);
+                          const stepNum = docReminders.findIndex(r => r.id === reminder.id) + 1;
+                          if (stepNum > 0) return (
+                            <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-atlantic-700/60 text-atlantic-200/40">
+                              Relance {stepNum}/{autoDelays.length}
+                            </span>
+                          );
+                        })()}
                       </div>
                       <p className="text-xs font-sans text-atlantic-200/50 line-clamp-2 whitespace-pre-line">{reminder.content}</p>
                       <p className="text-[10px] font-sans text-atlantic-200/30 mt-1">
@@ -422,21 +498,7 @@ export default function RemindersPage() {
                       {!reminder.sent_at && doc && (
                         <div className="flex items-center gap-1.5">
                           <Zap className={`w-3 h-3 ${getEffectiveAuto(doc.client_id) ? "text-gold-400" : "text-atlantic-200/20"}`} />
-                          <span className="text-[10px] font-sans text-atlantic-200/40">Auto dans</span>
-                          <input
-                            type="number"
-                            min={1}
-                            max={90}
-                            value={autoDelay}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => {
-                              const v = Math.max(1, Math.min(90, parseInt(e.target.value) || 7));
-                              setAutoDelay(v);
-                              localStorage.setItem("auto_reminder_delay", String(v));
-                            }}
-                            className="w-10 px-1 py-0.5 text-[10px] font-sans font-semibold text-center rounded bg-atlantic-700/60 border border-atlantic-500/20 text-white focus:outline-none focus:border-gold-400/40"
-                          />
-                          <span className="text-[10px] font-sans text-atlantic-200/40">j</span>
+                          <span className="text-[10px] font-sans text-atlantic-200/40">Auto</span>
                           <button
                             onClick={() => toggleAutoClient(doc.client_id)}
                             className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${getEffectiveAuto(doc.client_id) ? "bg-gold-400" : "bg-atlantic-600/60"}`}
