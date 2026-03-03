@@ -34,7 +34,8 @@
       "WebFetch(domain:www.pennylane.com)",
       "Bash(git:*)",
       "Bash(wc:*)",
-      "Bash(powershell.exe:*)"
+      "Bash(powershell.exe:*)",
+      "Bash(powershell:*)"
     ]
   }
 }

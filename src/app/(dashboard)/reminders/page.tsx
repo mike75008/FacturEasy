@@ -51,12 +51,18 @@ export default function RemindersPage() {
   const [autoNextMsg, setAutoNextMsg] = useState<string | null>(null);
   // Délai et ton personnalisés par relance (clé = reminder.id)
   const [nextDelayOverrides, setNextDelayOverrides] = useState<Record<string, number>>({});
-  const [nextToneOverrides, setNextToneOverrides] = useState<Record<string, string>>({});
+  const [cardToneOverrides, setCardToneOverrides] = useState<Record<string, string>>({});
 
   const AUTO_TONES = ["amical", "ferme", "mise en demeure"] as const;
   type Tone = typeof AUTO_TONES[number];
   const TONE_LABELS: Record<string, string> = { amical: "Amical", ferme: "Ferme", "mise en demeure": "Mise en demeure" };
   const TONE_COLORS: Record<string, string> = { amical: "blue", ferme: "amber", "mise en demeure": "red" };
+  const TONE_PRIORITY_LABELS: Record<string, string> = { amical: "Basse", ferme: "Moyenne", "mise en demeure": "Haute" };
+  const TONE_PRIORITY_COLORS: Record<string, string> = {
+    amical: "bg-blue-400/10 text-blue-400",
+    ferme: "bg-amber-400/10 text-amber-400",
+    "mise en demeure": "bg-red-400/10 text-red-400",
+  };
 
   useEffect(() => {
     setReminders(ctxReminders);
@@ -220,7 +226,7 @@ export default function RemindersPage() {
 
     const clientName = getClientName(doc.client_id);
     const days = doc.due_date ? getDaysOverdue(doc.due_date) : 0;
-    const tone = (nextToneOverrides[reminder.id] as Tone | undefined) ?? AUTO_TONES[Math.min(existingCount, AUTO_TONES.length - 1)];
+    const tone = (cardToneOverrides[reminder.id] as Tone | undefined) ?? AUTO_TONES[Math.min(existingCount, AUTO_TONES.length - 1)];
 
     const templates: Record<string, string> = {
       amical: `Bonjour ${clientName},\n\nNous nous permettons de vous rappeler que la facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} est arrivée à échéance depuis ${days} jour(s).\n\nNous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.\n\nCordialement,`,
@@ -481,11 +487,13 @@ export default function RemindersPage() {
               const stepNum = stepIndex + 1;
               const nextStepIndex = stepIndex + 1;
               const hasNext = nextStepIndex < autoDelays.length;
-              const nextTone = AUTO_TONES[Math.min(nextStepIndex, AUTO_TONES.length - 1)];
-              const TONE_LABELS: Record<string, string> = { amical: "Rappel amical", ferme: "Relance ferme", "mise en demeure": "Mise en demeure" };
-              const TONE_COLORS: Record<string, string> = { amical: "text-blue-400", ferme: "text-amber-400", "mise en demeure": "text-red-400" };
-              const toneLabel = TONE_LABELS[nextTone] ?? nextTone;
-              const toneColor = TONE_COLORS[nextTone] ?? "text-atlantic-200/60";
+              // Ton actif sur cette carte (override manuel ou ton naturel de la position)
+              const activeTone = (cardToneOverrides[reminder.id] as Tone | undefined) ?? AUTO_TONES[Math.min(stepIndex, AUTO_TONES.length - 1)];
+              const activeStepNum = AUTO_TONES.indexOf(activeTone) + 1;
+              // Ton de la prochaine auto-relance (pour l'aperçu cadence)
+              const nextAutoTone = AUTO_TONES[Math.min(nextStepIndex, AUTO_TONES.length - 1)];
+              const toneLabel = { amical: "Rappel amical", ferme: "Relance ferme", "mise en demeure": "Mise en demeure" }[nextAutoTone] ?? nextAutoTone;
+              const toneColor = { amical: "text-blue-400", ferme: "text-amber-400", "mise en demeure": "text-red-400" }[nextAutoTone] ?? "text-atlantic-200/60";
               const effectiveDelay = nextDelayOverrides[reminder.id] ?? autoDelays[nextStepIndex] ?? autoDelays[autoDelays.length - 1];
               const isAutoOn = doc ? getEffectiveAuto(doc.client_id) : false;
 
@@ -503,17 +511,15 @@ export default function RemindersPage() {
                         <p className="text-sm font-sans font-medium text-white">
                           {doc ? `${doc.number} - ${getClientName(doc.client_id)}` : "Document"}
                         </p>
-                        <span className={`text-[10px] font-sans px-2 py-0.5 rounded-full ${PRIORITY_COLORS[reminder.priority]}`}>
-                          {reminder.priority}
+                        <span className={`text-[10px] font-sans px-2 py-0.5 rounded-full ${TONE_PRIORITY_COLORS[activeTone] ?? PRIORITY_COLORS[reminder.priority]}`}>
+                          {TONE_PRIORITY_LABELS[activeTone] ?? reminder.priority}
                         </span>
-                        {reminder.ai_generated && (
-                          <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-gold-400/10 text-gold-400 flex items-center gap-1">
-                            <Sparkles className="w-2.5 h-2.5" /> IA
-                          </span>
-                        )}
-                        {stepNum > 0 && (
+                        <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-gold-400/10 text-gold-400 flex items-center gap-1">
+                          <Sparkles className="w-2.5 h-2.5" /> IA
+                        </span>
+                        {activeStepNum > 0 && (
                           <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-atlantic-700/60 text-atlantic-200/40">
-                            Relance {stepNum}/{autoDelays.length}
+                            Fermeté {activeStepNum}/{AUTO_TONES.length}
                           </span>
                         )}
                       </div>
@@ -557,13 +563,12 @@ export default function RemindersPage() {
                       {!reminder.sent_at ? (
                         <div className="flex items-center gap-1 flex-wrap justify-end">
                           {AUTO_TONES.map((t) => {
-                            const activeTone = nextToneOverrides[reminder.id] ?? nextTone;
                             const isActive = t === activeTone;
                             const c = TONE_COLORS[t];
                             return (
                               <button
                                 key={t}
-                                onClick={() => setNextToneOverrides(prev => ({ ...prev, [reminder.id]: t }))}
+                                onClick={() => setCardToneOverrides(prev => ({ ...prev, [reminder.id]: t }))}
                                 className={`text-[10px] font-sans font-medium px-2 py-0.5 rounded-full border transition-colors ${
                                   isActive
                                     ? c === "blue"   ? "bg-blue-400/20 border-blue-400/40 text-blue-300"

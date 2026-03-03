@@ -241,10 +241,11 @@ export default function SettingsPage() {
               />
               <div>
                 <label className="block text-xs font-sans text-atlantic-200/50 mb-1.5 uppercase tracking-wider">Forme juridique</label>
+                <div className="relative">
                 <select
                   value={org.legal_form || ""}
                   onChange={(e) => updateOrg("legal_form", e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-atlantic-800/50 border border-atlantic-600/20 text-white text-sm font-sans focus:border-gold-400/40 focus:outline-none transition-colors appearance-none"
+                  className="w-full px-3 py-2 pr-8 rounded-lg bg-atlantic-800/50 border border-atlantic-600/20 text-white text-sm font-sans focus:border-gold-400/40 focus:outline-none transition-colors appearance-none cursor-pointer"
                 >
                   <option value="">— Non renseigné —</option>
                   <optgroup label="Entreprise individuelle">
@@ -268,6 +269,10 @@ export default function SettingsPage() {
                     <option value="association">Association loi 1901</option>
                   </optgroup>
                 </select>
+                <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-atlantic-200/40">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                </div>
+                </div>
               </div>
               <PremiumInput
                 label="Capital social"
