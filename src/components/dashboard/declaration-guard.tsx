@@ -163,12 +163,17 @@ function checkRevenus(localDone: Set<string>): PendingDecl | null {
 
 // ─── Helpers structure ────────────────────────────────────────────────────────
 
+const IS_COMPANY_FORMS = new Set(["sas", "sasu", "sarl", "eurl", "sa", "sca"]);
+const FILING_COMPANY_FORMS = new Set(["sas", "sasu", "sarl", "eurl", "sa", "sca", "scs", "snc", "sci"]);
+
 function isISCompany(org: Organization): boolean {
-  return /\b(sas|sasu|sarl|sa|sca|scs)\b/i.test(org.legal_form ?? "");
+  const lf = (org.legal_form ?? "").toLowerCase().split(/[\s\-–—]/)[0];
+  return IS_COMPANY_FORMS.has(lf);
 }
 
 function isCompanyWithFilingObligation(org: Organization): boolean {
-  return /\b(sas|sasu|sarl|eurl|sa|sca|scs|snc|sci)\b/i.test(org.legal_form ?? "");
+  const lf = (org.legal_form ?? "").toLowerCase().split(/[\s\-–—]/)[0];
+  return FILING_COMPANY_FORMS.has(lf);
 }
 
 // ─── Check IS acomptes ────────────────────────────────────────────────────────

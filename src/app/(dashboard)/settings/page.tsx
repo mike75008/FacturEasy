@@ -239,12 +239,36 @@ export default function SettingsPage() {
                 onChange={(e) => updateOrg("tva_number", e.target.value)}
                 error={errors.tva_number}
               />
-              <PremiumInput
-                label="Forme juridique"
-                placeholder="SAS, SARL, EI..."
-                value={org.legal_form || ""}
-                onChange={(e) => updateOrg("legal_form", e.target.value)}
-              />
+              <div>
+                <label className="block text-xs font-sans text-atlantic-200/50 mb-1.5 uppercase tracking-wider">Forme juridique</label>
+                <select
+                  value={org.legal_form || ""}
+                  onChange={(e) => updateOrg("legal_form", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-atlantic-800/50 border border-atlantic-600/20 text-white text-sm font-sans focus:border-gold-400/40 focus:outline-none transition-colors appearance-none"
+                >
+                  <option value="">— Non renseigné —</option>
+                  <optgroup label="Entreprise individuelle">
+                    <option value="ei">EI — Entreprise individuelle</option>
+                    <option value="eirl">EIRL — Entreprise individuelle à responsabilité limitée</option>
+                    <option value="auto-entrepreneur">Auto-entrepreneur / Micro-entreprise</option>
+                  </optgroup>
+                  <optgroup label="Société à responsabilité limitée">
+                    <option value="sarl">SARL — Société à responsabilité limitée</option>
+                    <option value="eurl">EURL — Entreprise unipersonnelle à responsabilité limitée</option>
+                  </optgroup>
+                  <optgroup label="Société par actions">
+                    <option value="sas">SAS — Société par actions simplifiée</option>
+                    <option value="sasu">SASU — Société par actions simplifiée unipersonnelle</option>
+                    <option value="sa">SA — Société anonyme</option>
+                    <option value="sca">SCA — Société en commandite par actions</option>
+                  </optgroup>
+                  <optgroup label="Autres">
+                    <option value="snc">SNC — Société en nom collectif</option>
+                    <option value="sci">SCI — Société civile immobilière</option>
+                    <option value="association">Association loi 1901</option>
+                  </optgroup>
+                </select>
+              </div>
               <PremiumInput
                 label="Capital social"
                 placeholder="10 000 €"

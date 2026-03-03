@@ -1506,7 +1506,8 @@ export default function ComptabilitePage() {
             <div className="grid gap-2">
               {ALL_DECL_TYPES.map(({ type, label, external, companyOnly }) => {
                 const isActiveType = guardDemoType === type && guardLevel > 0;
-                const orgIsCompany = /\b(sas|sasu|sarl|eurl|sa|sca|scs|snc|sci)\b/i.test(org?.legal_form ?? "");
+                const lf = (org?.legal_form ?? "").toLowerCase().split(/[\s\-–—]/)[0];
+                const orgIsCompany = ["sas","sasu","sarl","eurl","sa","sca","scs","snc","sci"].includes(lf);
                 const irrelevant = companyOnly && org && !orgIsCompany;
                 const externalHost = type === "greffe" ? "infogreffe.fr" : "impots.gouv.fr";
                 return (
