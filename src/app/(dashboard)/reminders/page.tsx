@@ -8,7 +8,7 @@ import { PremiumButton } from "@/components/premium/premium-button";
 import { PageTransition } from "@/components/premium/page-transition";
 import {
   Bell, Brain, Mail, Phone, Plus, Send, Clock, AlertTriangle,
-  CheckCircle2, Sparkles, ChevronRight, MessageSquare, Zap, ExternalLink,
+  CheckCircle2, Sparkles, ChevronRight, MessageSquare, Zap, ExternalLink, Search,
 } from "lucide-react";
 import {
   saveReminder as saveReminderLS,
@@ -20,6 +20,7 @@ import {
 } from "@/lib/supabase/data";
 import { useAppContext } from "@/lib/context/app-context";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
+import { notifyRelanceSent, notifyContentieux } from "@/lib/notifications";
 import type { Reminder, Document as Doc, Client } from "@/types/database";
 
 const PRIORITY_COLORS = {
@@ -52,6 +53,11 @@ export default function RemindersPage() {
   // Délai et ton personnalisés par relance (clé = reminder.id)
   const [nextDelayOverrides, setNextDelayOverrides] = useState<Record<string, number>>({});
   const [cardToneOverrides, setCardToneOverrides] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState("");
+  const [searchOverdue, setSearchOverdue] = useState("");
+  const [groupPage, setGroupPage] = useState<Record<string, number>>({});
+  const [overdueCurrentPage, setOverdueCurrentPage] = useState(1);
+  const PAGE_SIZE = 10;
 
   const AUTO_TONES = ["amical", "ferme", "mise en demeure"] as const;
   type Tone = typeof AUTO_TONES[number];
@@ -63,11 +69,52 @@ export default function RemindersPage() {
     ferme: "bg-amber-400/10 text-amber-400",
     "mise en demeure": "bg-red-400/10 text-red-400",
   };
+  const TONE_GROUP_COLORS: Record<string, string> = {
+    amical: "border-blue-400/20",
+    ferme: "border-amber-400/20",
+    "mise en demeure": "border-red-400/20",
+  };
+
+  // Statut document lisible par type
+  const DOC_STATUS_TEXT: Record<string, Record<string, string>> = {
+    facture:            { paye: "Payée",       annule: "Annulée",   refuse: "Refusée",   envoye: "Envoyée",      valide: "Validée",    brouillon: "Brouillon" },
+    devis:              { paye: "Accepté",     annule: "Annulé",    refuse: "Refusé",    envoye: "Envoyé",       valide: "Validé",     brouillon: "Brouillon" },
+    contrat:            { paye: "Signé",       annule: "Annulé",    refuse: "Refusé",    envoye: "Envoyé",       valide: "Validé",     brouillon: "Brouillon" },
+    avoir:              { paye: "Remboursé",   annule: "Annulé",    refuse: "Refusé",    envoye: "Envoyé",       valide: "Validé",     brouillon: "Brouillon" },
+    bon_livraison:      { paye: "Livré",       annule: "Annulé",    refuse: "Refusé",    envoye: "En livraison", valide: "Validé",     brouillon: "Brouillon" },
+    ordre_mission:      { paye: "Terminé",     annule: "Annulé",    refuse: "Refusé",    envoye: "En cours",     valide: "Validé",     brouillon: "Brouillon" },
+    fiche_intervention: { paye: "Clôturée",    annule: "Annulée",   refuse: "Refusée",   envoye: "En cours",     valide: "Validée",    brouillon: "Brouillon" },
+    bon_commande:       { paye: "Réceptionné", annule: "Annulé",    refuse: "Refusé",    envoye: "Envoyé",       valide: "Validé",     brouillon: "Brouillon" },
+    recu:               { paye: "Émis",        annule: "Annulé",    refuse: "Refusé",    envoye: "Envoyé",       valide: "Validé",     brouillon: "Brouillon" },
+  };
+  const DOC_STATUS_COLORS: Record<string, string> = {
+    paye: "bg-emerald-400/10 text-emerald-400",
+    annule: "bg-red-400/10 text-red-400",
+    refuse: "bg-red-400/10 text-red-400",
+    envoye: "bg-amber-400/10 text-amber-400",
+    valide: "bg-blue-400/10 text-blue-400",
+    brouillon: "bg-atlantic-500/10 text-atlantic-200/40",
+  };
+  const DOC_VIEW_LABELS: Record<string, string> = {
+    facture: "Voir la facture", devis: "Voir le devis", contrat: "Voir le contrat",
+    bon_livraison: "Voir le bon de livraison", ordre_mission: "Voir la mission",
+    fiche_intervention: "Voir l'intervention", bon_commande: "Voir la commande",
+    recu: "Voir le reçu", avoir: "Voir l'avoir",
+  };
 
   useEffect(() => {
     setReminders(ctxReminders);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctxReminders]);
+
+  // Reset pagination dès que la recherche change
+  useEffect(() => {
+    setGroupPage({});
+  }, [search]);
+
+  useEffect(() => {
+    setOverdueCurrentPage(1);
+  }, [searchOverdue]);
 
   useEffect(() => {
     const global = localStorage.getItem("auto_reminder_global");
@@ -143,6 +190,14 @@ export default function RemindersPage() {
 
   function getDaysOverdue(dueDate: string): number {
     return Math.floor((Date.now() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24));
+  }
+
+  function getActiveToneForReminder(rem: Reminder): Tone {
+    const override = cardToneOverrides[rem.id] as Tone | undefined;
+    if (override) return override;
+    const docRems = reminders.filter(r => r.document_id === rem.document_id);
+    const idx = Math.max(0, docRems.findIndex(r => r.id === rem.id));
+    return AUTO_TONES[Math.min(idx, AUTO_TONES.length - 1)];
   }
 
   function getDaysWaiting(doc: Doc): number {
@@ -273,6 +328,13 @@ export default function RemindersPage() {
       }
     }
 
+    // Notification relance envoyée
+    const docForNotif = documents.find((d) => d.id === reminder.document_id);
+    if (docForNotif) {
+      const toneForNotif = (cardToneOverrides[reminder.id] as string | undefined) ?? "amical";
+      notifyRelanceSent(docForNotif.number, getClientName(docForNotif.client_id), toneForNotif, docForNotif.id);
+    }
+
     // Auto-relance si activée pour ce client
     const doc = documents.find((d) => d.id === reminder.document_id);
     if (!doc) return;
@@ -280,8 +342,11 @@ export default function RemindersPage() {
 
     const existingCount = reminders.filter((r) => r.document_id === doc.id).length;
 
-    // Stop si max atteint
-    if (existingCount >= autoDelays.length) return;
+    // Stop si max atteint — notification contentieux
+    if (existingCount >= autoDelays.length) {
+      notifyContentieux(doc.number, getClientName(doc.client_id), doc.id);
+      return;
+    }
 
     const delay = nextDelayOverrides[reminder.id] ?? autoDelays[existingCount] ?? autoDelays[autoDelays.length - 1];
     const scheduledDate = new Date();
@@ -318,6 +383,16 @@ export default function RemindersPage() {
     setAutoNextMsg(`${toneLabel} programmée pour le ${scheduledDate.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}`);
     setTimeout(() => setAutoNextMsg(null), 6000);
   }
+
+  // Factures en retard — filtrage + pagination
+  const filteredOverdue = searchOverdue.trim()
+    ? overdueInvoices.filter(d => {
+        const q = searchOverdue.toLowerCase();
+        return d.number.toLowerCase().includes(q) || getClientName(d.client_id).toLowerCase().includes(q);
+      })
+    : overdueInvoices;
+  const overdueTotalPages = Math.max(1, Math.ceil(filteredOverdue.length / PAGE_SIZE));
+  const overdueVisible = filteredOverdue.slice((overdueCurrentPage - 1) * PAGE_SIZE, overdueCurrentPage * PAGE_SIZE);
 
   return (
     <PageTransition>
@@ -386,7 +461,7 @@ export default function RemindersPage() {
         {/* Overdue alert bar + liste par client */}
         {overdueInvoices.length > 0 && (
           <GlassCard hover={false} className="border-red-400/15">
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-red-400" />
                 <div>
@@ -400,8 +475,19 @@ export default function RemindersPage() {
                 Créer une relance
               </PremiumButton>
             </div>
+            {/* Recherche factures en retard */}
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-atlantic-200/30 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Rechercher une facture ou un client…"
+                value={searchOverdue}
+                onChange={(e) => setSearchOverdue(e.target.value)}
+                className="w-full pl-8 pr-4 py-2 rounded-lg bg-atlantic-800/50 border border-atlantic-600/20 text-xs font-sans text-white placeholder-atlantic-200/30 focus:outline-none focus:border-red-400/30 transition-colors"
+              />
+            </div>
             <div className="space-y-2">
-              {overdueInvoices.map((doc) => {
+              {overdueVisible.map((doc) => {
                 const effective = getEffectiveAuto(doc.client_id);
                 const isOverride = doc.client_id in autoOverrides;
                 const sentCount = reminders.filter(r => r.document_id === doc.id && r.sent_at).length;
@@ -456,6 +542,30 @@ export default function RemindersPage() {
                   </div>
                 );
               })}
+            </div>
+            {/* Pagination factures en retard */}
+            <div className="flex items-center justify-center gap-1 mt-3 pt-3 border-t border-atlantic-600/10">
+              <button
+                onClick={() => setOverdueCurrentPage(p => p - 1)}
+                disabled={overdueCurrentPage === 1}
+                className="px-2.5 py-1 rounded-lg text-[11px] font-sans text-atlantic-200/40 hover:text-white border border-atlantic-600/15 hover:border-atlantic-400/30 transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+              >←</button>
+              {Array.from({ length: overdueTotalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setOverdueCurrentPage(page)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-sans border transition-colors ${
+                    page === overdueCurrentPage
+                      ? "bg-red-400/15 border-red-400/30 text-red-300 font-semibold"
+                      : "text-atlantic-200/40 hover:text-white border-atlantic-600/15 hover:border-atlantic-400/30"
+                  }`}
+                >{page}</button>
+              ))}
+              <button
+                onClick={() => setOverdueCurrentPage(p => p + 1)}
+                disabled={overdueCurrentPage >= overdueTotalPages}
+                className="px-2.5 py-1 rounded-lg text-[11px] font-sans text-atlantic-200/40 hover:text-white border border-atlantic-600/15 hover:border-atlantic-400/30 transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+              >→</button>
             </div>
             {overdueInvoices.some((d) => d.client_id in autoOverrides) && (
               <p className="text-[10px] font-sans text-atlantic-200/30 mt-3">✱ Override individuel — différent du réglage global</p>
@@ -600,7 +710,21 @@ export default function RemindersPage() {
           </GlassCard>
         )}
 
-        {/* Reminders list */}
+        {/* Barre de recherche */}
+        {reminders.length > 0 && (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-atlantic-200/30 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Rechercher par client, numéro de document…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-atlantic-800/50 border border-atlantic-600/20 text-sm font-sans text-white placeholder-atlantic-200/30 focus:outline-none focus:border-gold-400/30 transition-colors"
+            />
+          </div>
+        )}
+
+        {/* Reminders list — groupés par ton */}
         {reminders.length === 0 && !showCreate ? (
           <GlassCard hover={false} className="py-20">
             <div className="text-center">
@@ -618,136 +742,264 @@ export default function RemindersPage() {
             </div>
           </GlassCard>
         ) : (
-          <div className="space-y-2">
-            {reminders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((reminder) => {
-              const doc = documents.find((d) => d.id === reminder.document_id);
-              const ChannelIcon = CHANNEL_ICONS[reminder.channel] || Mail;
+          <div className="space-y-4">
 
-              // Calculs étape — faits ici, hors JSX
-              const docReminders = reminders.filter(r => r.document_id === reminder.document_id);
-              const stepIndex = docReminders.findIndex(r => r.id === reminder.id);
-              const stepNum = stepIndex + 1;
-              const nextStepIndex = stepIndex + 1;
-              const hasNext = nextStepIndex < autoDelays.length;
-              // Ton actif sur cette carte (override manuel ou ton naturel de la position)
-              const activeTone = (cardToneOverrides[reminder.id] as Tone | undefined) ?? AUTO_TONES[Math.min(stepIndex, AUTO_TONES.length - 1)];
-              const activeStepNum = AUTO_TONES.indexOf(activeTone) + 1;
-              // Ton de la prochaine auto-relance (pour l'aperçu cadence)
-              const nextAutoTone = AUTO_TONES[Math.min(nextStepIndex, AUTO_TONES.length - 1)];
-              const toneLabel = { amical: "Rappel amical", ferme: "Relance ferme", "mise en demeure": "Mise en demeure" }[nextAutoTone] ?? nextAutoTone;
-              const toneColor = { amical: "text-blue-400", ferme: "text-amber-400", "mise en demeure": "text-red-400" }[nextAutoTone] ?? "text-atlantic-200/60";
-              const effectiveDelay = nextDelayOverrides[reminder.id] ?? autoDelays[nextStepIndex] ?? autoDelays[autoDelays.length - 1];
-              const isAutoOn = doc ? getEffectiveAuto(doc.client_id) : false;
+            {/* ── 3 groupes tonaux — relances non envoyées ── */}
+            {AUTO_TONES.map((groupTone) => {
+              const allGroupReminders = reminders
+                .filter(r => !r.sent_at && getActiveToneForReminder(r) === groupTone)
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+              const groupReminders = search.trim()
+                ? allGroupReminders.filter(r => {
+                    const doc = documents.find(d => d.id === r.document_id);
+                    const q = search.toLowerCase();
+                    return doc?.number.toLowerCase().includes(q) || getClientName(doc?.client_id ?? "").toLowerCase().includes(q);
+                  })
+                : allGroupReminders;
+              if (groupReminders.length === 0) return null;
+              const currentPage = groupPage[groupTone] ?? 1;
+              const totalPages = Math.ceil(groupReminders.length / PAGE_SIZE);
+              const visibleReminders = groupReminders.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+              const groupClientIds = [...new Set(groupReminders.map(r => {
+                const d = documents.find(doc => doc.id === r.document_id);
+                return d?.client_id ?? "";
+              }).filter(Boolean))];
+              const allAutoOn = groupClientIds.every(id => getEffectiveAuto(id));
+              const c = TONE_COLORS[groupTone];
 
               return (
-                <GlassCard key={reminder.id} className={`!p-4 ${!reminder.sent_at && reminder.scheduled_for ? "border-gold-400/15" : ""}`}>
-                  <div className="flex items-start gap-4">
-                    <div className={`p-2 rounded-lg ${!reminder.sent_at && reminder.scheduled_for ? "bg-gold-400/8" : "bg-gold-400/10"}`}>
-                      {!reminder.sent_at && reminder.scheduled_for
-                        ? <Clock className="w-5 h-5 text-gold-400/60" />
-                        : <ChannelIcon className="w-5 h-5 text-gold-400" />
-                      }
+                <GlassCard key={groupTone} hover={false} className={TONE_GROUP_COLORS[groupTone]}>
+                  {/* En-tête groupe */}
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-sans font-semibold px-2.5 py-1 rounded-full border ${
+                        c === "blue"  ? "bg-blue-400/15 border-blue-400/30 text-blue-300"
+                        : c === "amber" ? "bg-amber-400/15 border-amber-400/30 text-amber-300"
+                        : "bg-red-400/15 border-red-400/30 text-red-300"
+                      }`}>
+                        {TONE_LABELS[groupTone]}
+                      </span>
+                      <span className="text-xs font-sans text-atlantic-200/40">
+                        {groupReminders.length} relance{groupReminders.length > 1 ? "s" : ""}
+                      </span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <p className="text-sm font-sans font-medium text-white">
-                          {doc ? `${doc.number} - ${getClientName(doc.client_id)}` : "Document"}
-                        </p>
-                        <span className={`text-[10px] font-sans px-2 py-0.5 rounded-full ${TONE_PRIORITY_COLORS[activeTone] ?? PRIORITY_COLORS[reminder.priority]}`}>
-                          {TONE_PRIORITY_LABELS[activeTone] ?? reminder.priority}
-                        </span>
-                        <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-gold-400/10 text-gold-400 flex items-center gap-1">
-                          <Sparkles className="w-2.5 h-2.5" /> IA
-                        </span>
-                        {activeStepNum > 0 && (
-                          <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-atlantic-700/60 text-atlantic-200/40">
-                            Fermeté {activeStepNum}/{AUTO_TONES.length}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs font-sans text-atlantic-200/50 line-clamp-2 whitespace-pre-line">{reminder.content}</p>
-                      <p className="text-[10px] font-sans text-atlantic-200/30 mt-1">
-                        {new Date(reminder.created_at).toLocaleString("fr-FR")}
-                        {reminder.sent_at && " • Envoyée"}
-                        {!reminder.sent_at && reminder.scheduled_for && (
-                          <span className="text-gold-400/60"> • Programmée le {new Date(reminder.scheduled_for).toLocaleDateString("fr-FR")}</span>
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
-
-                      {/* 1. Voir la facture */}
-                      {doc && (
+                    <div className="flex items-center gap-3">
+                      {/* Toggle auto de groupe */}
+                      <div className="flex items-center gap-1.5">
+                        <Zap className={`w-3 h-3 ${allAutoOn ? "text-gold-400" : "text-atlantic-200/20"}`} />
+                        <span className="text-[10px] font-sans text-atlantic-200/40">Auto groupe</span>
                         <button
-                          onClick={() => { sessionStorage.setItem("open_doc_id", doc.id); router.push("/documents"); }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-atlantic-700/50 border border-atlantic-500/20 text-atlantic-200/60 text-xs font-sans hover:text-white hover:border-atlantic-400/40 transition-colors"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          Voir la facture
-                        </button>
-                      )}
-
-                      {/* 2. Auto toggle */}
-                      {!reminder.sent_at && doc && (
-                        <div className="flex items-center gap-1.5">
-                          <Zap className={`w-3 h-3 ${isAutoOn ? "text-gold-400" : "text-atlantic-200/20"}`} />
-                          <span className="text-[10px] font-sans text-atlantic-200/40">Auto</span>
-                          <button
-                            onClick={() => toggleAutoClient(doc.client_id)}
-                            className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${isAutoOn ? "bg-gold-400" : "bg-atlantic-600/60"}`}
-                          >
-                            <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform duration-200 ${isAutoOn ? "translate-x-4" : "translate-x-0.5"}`} />
-                          </button>
-                        </div>
-                      )}
-
-                      {/* 3. Badges ton + variateur jours + Envoyer — même ligne */}
-                      {!reminder.sent_at ? (
-                        <div className="flex items-center gap-1 flex-wrap justify-end">
-                          {AUTO_TONES.map((t) => {
-                            const isActive = t === activeTone;
-                            const c = TONE_COLORS[t];
-                            return (
-                              <button
-                                key={t}
-                                onClick={() => setCardToneOverrides(prev => ({ ...prev, [reminder.id]: t }))}
-                                className={`text-[10px] font-sans font-medium px-2 py-0.5 rounded-full border transition-colors ${
-                                  isActive
-                                    ? c === "blue"   ? "bg-blue-400/20 border-blue-400/40 text-blue-300"
-                                    : c === "amber"  ? "bg-amber-400/20 border-amber-400/40 text-amber-300"
-                                    : "bg-red-400/20 border-red-400/40 text-red-300"
-                                    : "bg-atlantic-800/40 border-atlantic-600/20 text-atlantic-200/30 hover:text-white hover:border-atlantic-400/30"
-                                }`}
-                              >
-                                {TONE_LABELS[t]}
-                              </button>
-                            );
+                          onClick={() => groupClientIds.forEach(id => {
+                            const current = getEffectiveAuto(id);
+                            if (current !== !allAutoOn) toggleAutoClient(id);
                           })}
-                          <input
-                            type="number"
-                            min={1}
-                            max={180}
-                            value={effectiveDelay}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => {
-                              const v = Math.max(1, Math.min(180, parseInt(e.target.value) || 1));
-                              setNextDelayOverrides(prev => ({ ...prev, [reminder.id]: v }));
-                            }}
-                            className="w-10 px-1 py-0.5 text-[10px] font-sans font-semibold text-center rounded bg-atlantic-700/60 border border-atlantic-500/20 text-white focus:outline-none focus:border-gold-400/40"
-                          />
-                          <span className="text-[10px] font-sans text-atlantic-200/30 mr-1">j</span>
-                          <PremiumButton variant="outline" size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => markSent(reminder)}>
-                            Envoyer
-                          </PremiumButton>
-                        </div>
-                      ) : (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                      )}
+                          className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${allAutoOn ? "bg-gold-400" : "bg-atlantic-600/60"}`}
+                        >
+                          <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform duration-200 ${allAutoOn ? "translate-x-4" : "translate-x-0.5"}`} />
+                        </button>
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Cards du groupe */}
+                  <div className="space-y-2">
+                    {visibleReminders.map((reminder) => {
+                      const doc = documents.find((d) => d.id === reminder.document_id);
+                      const ChannelIcon = CHANNEL_ICONS[reminder.channel] || Mail;
+                      const docReminders = reminders.filter(r => r.document_id === reminder.document_id);
+                      const stepIndex = docReminders.findIndex(r => r.id === reminder.id);
+                      const nextStepIndex = stepIndex + 1;
+                      const activeTone = getActiveToneForReminder(reminder);
+                      const activeStepNum = AUTO_TONES.indexOf(activeTone) + 1;
+                      const effectiveDelay = nextDelayOverrides[reminder.id] ?? autoDelays[nextStepIndex] ?? autoDelays[autoDelays.length - 1];
+                      const isAutoOn = doc ? getEffectiveAuto(doc.client_id) : false;
+                      const docStatusText = doc ? (DOC_STATUS_TEXT[doc.type]?.[doc.status] ?? doc.status) : null;
+                      const docStatusColor = doc ? (DOC_STATUS_COLORS[doc.status] ?? "") : "";
+                      const viewDocLabel = doc ? (DOC_VIEW_LABELS[doc.type] ?? "Voir le document") : "Voir le document";
+
+                      return (
+                        <div key={reminder.id} className={`rounded-xl border p-3 ${reminder.scheduled_for ? "bg-gold-400/[0.03] border-gold-400/10" : "bg-atlantic-800/40 border-atlantic-600/15"}`}>
+                          <div className="flex items-start gap-3">
+                            <div className={`p-1.5 rounded-lg flex-shrink-0 ${reminder.scheduled_for ? "bg-gold-400/8" : "bg-gold-400/10"}`}>
+                              {reminder.scheduled_for
+                                ? <Clock className="w-4 h-4 text-gold-400/60" />
+                                : <ChannelIcon className="w-4 h-4 text-gold-400" />
+                              }
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                                <p className="text-sm font-sans font-medium text-white">
+                                  {doc ? `${doc.number} — ${getClientName(doc.client_id)}` : "Document"}
+                                </p>
+                                {docStatusText && (
+                                  <span className={`text-[10px] font-sans font-semibold px-2 py-0.5 rounded-full ${docStatusColor}`}>
+                                    {docStatusText}
+                                  </span>
+                                )}
+                                <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-gold-400/10 text-gold-400 flex items-center gap-1">
+                                  <Sparkles className="w-2.5 h-2.5" /> IA
+                                </span>
+                                <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-atlantic-700/60 text-atlantic-200/40">
+                                  Fermeté {activeStepNum}/{AUTO_TONES.length}
+                                </span>
+                              </div>
+                              <p className="text-xs font-sans text-atlantic-200/50 line-clamp-2 whitespace-pre-line">{reminder.content}</p>
+                              <p className="text-[10px] font-sans text-atlantic-200/30 mt-1">
+                                {new Date(reminder.created_at).toLocaleString("fr-FR")}
+                                {reminder.scheduled_for && (
+                                  <span className="text-gold-400/60"> • Programmée le {new Date(reminder.scheduled_for).toLocaleDateString("fr-FR")}</span>
+                                )}
+                              </p>
+                            </div>
+                            <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                              {doc && (
+                                <button
+                                  onClick={() => { sessionStorage.setItem("open_doc_id", doc.id); router.push("/documents"); }}
+                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-atlantic-700/50 border border-atlantic-500/20 text-atlantic-200/60 text-xs font-sans hover:text-white hover:border-atlantic-400/40 transition-colors"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                  {viewDocLabel}
+                                </button>
+                              )}
+                              <div className="flex items-center gap-1.5">
+                                <Zap className={`w-3 h-3 ${isAutoOn ? "text-gold-400" : "text-atlantic-200/20"}`} />
+                                <span className="text-[10px] font-sans text-atlantic-200/40">Auto</span>
+                                <button
+                                  onClick={() => doc && toggleAutoClient(doc.client_id)}
+                                  className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${isAutoOn ? "bg-gold-400" : "bg-atlantic-600/60"}`}
+                                >
+                                  <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform duration-200 ${isAutoOn ? "translate-x-4" : "translate-x-0.5"}`} />
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-1 flex-wrap justify-end">
+                                {AUTO_TONES.map((t) => {
+                                  const isActive = t === activeTone;
+                                  const tc = TONE_COLORS[t];
+                                  return (
+                                    <button
+                                      key={t}
+                                      onClick={() => setCardToneOverrides(prev => ({ ...prev, [reminder.id]: t }))}
+                                      className={`text-[10px] font-sans font-medium px-2 py-0.5 rounded-full border transition-colors ${
+                                        isActive
+                                          ? tc === "blue"  ? "bg-blue-400/20 border-blue-400/40 text-blue-300"
+                                          : tc === "amber" ? "bg-amber-400/20 border-amber-400/40 text-amber-300"
+                                          : "bg-red-400/20 border-red-400/40 text-red-300"
+                                          : "bg-atlantic-800/40 border-atlantic-600/20 text-atlantic-200/30 hover:text-white hover:border-atlantic-400/30"
+                                      }`}
+                                    >
+                                      {TONE_LABELS[t]}
+                                    </button>
+                                  );
+                                })}
+                                <input
+                                  type="number" min={1} max={180} value={effectiveDelay}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => {
+                                    const v = Math.max(1, Math.min(180, parseInt(e.target.value) || 1));
+                                    setNextDelayOverrides(prev => ({ ...prev, [reminder.id]: v }));
+                                  }}
+                                  className="w-10 px-1 py-0.5 text-[10px] font-sans font-semibold text-center rounded bg-atlantic-700/60 border border-atlantic-500/20 text-white focus:outline-none focus:border-gold-400/40"
+                                />
+                                <span className="text-[10px] font-sans text-atlantic-200/30">j</span>
+                                <PremiumButton variant="outline" size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => markSent(reminder)}>
+                                  Envoyer
+                                </PremiumButton>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Pagination numérotée — toujours visible */}
+                  <div className="flex items-center justify-center gap-1 mt-3 pt-3 border-t border-atlantic-600/10">
+                    <button
+                      onClick={() => setGroupPage(prev => ({ ...prev, [groupTone]: currentPage - 1 }))}
+                      disabled={currentPage === 1}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-sans text-atlantic-200/40 hover:text-white border border-atlantic-600/15 hover:border-atlantic-400/30 transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+                    >
+                      ←
+                    </button>
+                    {Array.from({ length: Math.max(1, totalPages) }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        onClick={() => setGroupPage(prev => ({ ...prev, [groupTone]: page }))}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-sans border transition-colors ${
+                          page === currentPage
+                            ? "bg-gold-400/15 border-gold-400/30 text-gold-400 font-semibold"
+                            : "text-atlantic-200/40 hover:text-white border-atlantic-600/15 hover:border-atlantic-400/30"
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setGroupPage(prev => ({ ...prev, [groupTone]: currentPage + 1 }))}
+                      disabled={currentPage >= Math.max(1, totalPages)}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-sans text-atlantic-200/40 hover:text-white border border-atlantic-600/15 hover:border-atlantic-400/30 transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+                    >
+                      →
+                    </button>
                   </div>
                 </GlassCard>
               );
             })}
+
+            {/* ── Envoyées ── */}
+            {reminders.some(r => r.sent_at) && (
+              <GlassCard hover={false} className="border-atlantic-600/10">
+                <p className="text-xs font-sans font-semibold text-atlantic-200/40 mb-3 flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  Envoyées — {reminders.filter(r => r.sent_at).length}
+                </p>
+                <div className="space-y-2">
+                  {reminders
+                    .filter(r => {
+                      if (!search.trim()) return r.sent_at;
+                      const doc = documents.find(d => d.id === r.document_id);
+                      const q = search.toLowerCase();
+                      return r.sent_at && (doc?.number.toLowerCase().includes(q) || getClientName(doc?.client_id ?? "").toLowerCase().includes(q));
+                    })
+                    .sort((a, b) => new Date(b.sent_at!).getTime() - new Date(a.sent_at!).getTime())
+                    .map((reminder) => {
+                      const doc = documents.find((d) => d.id === reminder.document_id);
+                      const docStatusText = doc ? (DOC_STATUS_TEXT[doc.type]?.[doc.status] ?? doc.status) : null;
+                      const docStatusColor = doc ? (DOC_STATUS_COLORS[doc.status] ?? "") : "";
+                      const viewDocLabel = doc ? (DOC_VIEW_LABELS[doc.type] ?? "Voir le document") : "Voir le document";
+                      return (
+                        <div key={reminder.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-atlantic-800/20 border border-atlantic-600/10 gap-3">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-xs font-sans text-atlantic-200/60 truncate">
+                                {doc ? `${doc.number} — ${getClientName(doc.client_id)}` : "Document"}
+                              </p>
+                              <p className="text-[10px] font-sans text-atlantic-200/30">
+                                Envoyée le {new Date(reminder.sent_at!).toLocaleDateString("fr-FR")}
+                              </p>
+                            </div>
+                            {docStatusText && (
+                              <span className={`shrink-0 text-[10px] font-sans font-semibold px-2 py-0.5 rounded-full ${docStatusColor}`}>
+                                {docStatusText}
+                              </span>
+                            )}
+                          </div>
+                          {doc && (
+                            <button
+                              onClick={() => { sessionStorage.setItem("open_doc_id", doc.id); router.push("/documents"); }}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-atlantic-700/40 border border-atlantic-500/15 text-atlantic-200/40 text-[10px] font-sans hover:text-white transition-colors flex-shrink-0"
+                            >
+                              <ExternalLink className="w-2.5 h-2.5" />
+                              {viewDocLabel}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              </GlassCard>
+            )}
           </div>
         )}
       </div>

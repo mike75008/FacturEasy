@@ -13,6 +13,7 @@ import { useAppContext } from "@/lib/context/app-context";
 import { useDeclarationGuard } from "@/components/dashboard/declaration-guard";
 import { computeInsights, filterUnseen } from "@/lib/insights";
 import { getUnreadCount } from "@/lib/tickets";
+import { getUnreadNotifCount } from "@/lib/notifications";
 
 const navItems = [
   { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
@@ -41,6 +42,7 @@ export function Sidebar() {
   const { level: declarationLevel } = useDeclarationGuard();
   const [insightCount, setInsightCount] = useState(0);
   const [ticketCount, setTicketCount] = useState(0);
+  const [notifCount, setNotifCount] = useState(0);
 
   useEffect(() => {
     if (!documents.length && !clients.length) return;
@@ -54,6 +56,13 @@ export function Sidebar() {
     function handleUpdate() { setTicketCount(getUnreadCount()); }
     window.addEventListener("tickets-updated", handleUpdate);
     return () => window.removeEventListener("tickets-updated", handleUpdate);
+  }, []);
+
+  useEffect(() => {
+    setNotifCount(getUnreadNotifCount());
+    function handleUpdate() { setNotifCount(getUnreadNotifCount()); }
+    window.addEventListener("notifications-updated", handleUpdate);
+    return () => window.removeEventListener("notifications-updated", handleUpdate);
   }, []);
 
   // Refs pour mesurer les positions réelles des items
@@ -202,6 +211,11 @@ export function Sidebar() {
                     {item.href === "/support" && ticketCount > 0 && (
                       <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-violet-400 flex items-center justify-center text-[8px] font-bold text-white animate-pulse">
                         {ticketCount > 9 ? "9+" : ticketCount}
+                      </span>
+                    )}
+                    {item.href === "/messages" && notifCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-gold-400 flex items-center justify-center text-[8px] font-bold text-atlantic-900 animate-pulse">
+                        {notifCount > 9 ? "9+" : notifCount}
                       </span>
                     )}
                     {item.href === "/comptabilite" && declarationLevel >= 1 && (

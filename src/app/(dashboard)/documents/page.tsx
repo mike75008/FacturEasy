@@ -32,6 +32,7 @@ import { useAppContext } from "@/lib/context/app-context";
 import { downloadInvoicePDF } from "@/components/pdf/invoice-pdf";
 import type { Organization } from "@/types/database";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
+import { notifyFacturePaid, notifyDevisAccepted, notifyDevisConverted } from "@/lib/notifications";
 import { calculateLineTotals as calcLine } from "@/lib/validators";
 import type { Document as Doc, DocumentLine, Client, Product } from "@/types/database";
 
@@ -512,6 +513,7 @@ export default function DocumentsPage() {
       }
       // Marquer le devis comme accepté
       await saveDocumentDB({ ...devis, status: "paye" });
+      notifyDevisConverted(devis.number, facture.number, facture.id);
       await refreshDocuments();
       // Ouvrir la nouvelle facture
       await openDetail(facture);
@@ -553,6 +555,10 @@ export default function DocumentsPage() {
       await saveDocumentDB(updated);
       if (doc.type === "facture" && status === "paye") {
         await generateRecu(doc);
+        notifyFacturePaid(doc.number, formatCurrency(doc.total_ttc), getClientName(doc.client_id), doc.id);
+      }
+      if (doc.type === "devis" && status === "paye") {
+        notifyDevisAccepted(doc.number, getClientName(doc.client_id), doc.id);
       }
       await refreshDocuments();
     } catch {

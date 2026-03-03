@@ -49,6 +49,10 @@ export interface Ticket {
   autoRelance: boolean;
   autoRelanceDelay: number; // jours
 
+  // ── Relance — ton et étape ─────────────────────────────────────────────────
+  relanceTone: "amical" | "ferme" | "mise en demeure";
+  relanceStep: number; // 0 = pas encore relancé, 1/2/3 = étape atteinte
+
   // ── Journal d'activité ─────────────────────────────────────────────────────
   activities: TicketActivity[];
 }
