@@ -553,8 +553,8 @@ export default function RemindersPage() {
                         </div>
                       )}
 
-                      {/* 3. Badges ton + variateur jours */}
-                      {!reminder.sent_at && (
+                      {/* 3. Badges ton + variateur jours + Envoyer — même ligne */}
+                      {!reminder.sent_at ? (
                         <div className="flex items-center gap-1 flex-wrap justify-end">
                           {AUTO_TONES.map((t) => {
                             const activeTone = nextToneOverrides[reminder.id] ?? nextTone;
@@ -588,15 +588,11 @@ export default function RemindersPage() {
                             }}
                             className="w-10 px-1 py-0.5 text-[10px] font-sans font-semibold text-center rounded bg-atlantic-700/60 border border-atlantic-500/20 text-white focus:outline-none focus:border-gold-400/40"
                           />
-                          <span className="text-[10px] font-sans text-atlantic-200/30">j</span>
+                          <span className="text-[10px] font-sans text-atlantic-200/30 mr-1">j</span>
+                          <PremiumButton variant="outline" size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => markSent(reminder)}>
+                            Envoyer
+                          </PremiumButton>
                         </div>
-                      )}
-
-                      {/* 4. Envoyer / Envoyée */}
-                      {!reminder.sent_at ? (
-                        <PremiumButton variant="outline" size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => markSent(reminder)}>
-                          Envoyer
-                        </PremiumButton>
                       ) : (
                         <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
                       )}
