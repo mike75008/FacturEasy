@@ -110,6 +110,31 @@ export default function RemindersPage() {
     });
   }, [documents]);
 
+  // Config par type : seuil en jours avant alerte, label d'action, couleur
+  const PENDING_DOC_CONFIG: Record<string, { alertLabel: string; actionLabel: string; thresholdDays: number; color: string }> = {
+    devis:              { alertLabel: "Devis en attente de réponse",    actionLabel: "Relancer la validation",  thresholdDays: 7,  color: "border-blue-400/15" },
+    contrat:            { alertLabel: "Contrat en attente de signature", actionLabel: "Relancer la signature",   thresholdDays: 14, color: "border-cyan-400/15"  },
+    bon_commande:       { alertLabel: "Commande en attente de réception",actionLabel: "Relancer la réception",   thresholdDays: 7,  color: "border-rose-400/15"  },
+    ordre_mission:      { alertLabel: "Mission en attente de réponse",   actionLabel: "Relancer l'acceptation",  thresholdDays: 14, color: "border-indigo-400/15" },
+    fiche_intervention: { alertLabel: "Intervention en attente de clôture",actionLabel: "Relancer la clôture",  thresholdDays: 3,  color: "border-orange-400/15" },
+  };
+
+  const pendingDocs = useMemo(() => {
+    const now = Date.now();
+    return documents.filter((d) => {
+      const cfg = PENDING_DOC_CONFIG[d.type];
+      if (!cfg) return false;
+      if (d.status === "paye" || d.status === "annule" || d.status === "refuse") return false;
+      if (d.status !== "envoye") return false;
+      // Devis : expiré si due_date dépassé
+      if (d.type === "devis" && d.due_date) return new Date(d.due_date) < new Date();
+      // Autres : envoyé depuis > seuil jours
+      const ref = new Date(d.created_at).getTime();
+      return Math.floor((now - ref) / 86_400_000) >= cfg.thresholdDays;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documents]);
+
   function getClientName(clientId: string): string {
     const c = clients.find((cl) => cl.id === clientId);
     if (!c) return "Inconnu";
@@ -118,6 +143,13 @@ export default function RemindersPage() {
 
   function getDaysOverdue(dueDate: string): number {
     return Math.floor((Date.now() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24));
+  }
+
+  function getDaysWaiting(doc: Doc): number {
+    const ref = doc.due_date && doc.type === "devis"
+      ? doc.due_date
+      : doc.created_at;
+    return Math.floor((Date.now() - new Date(ref).getTime()) / 86_400_000);
   }
 
   async function generateAIReminder() {
@@ -183,14 +215,45 @@ export default function RemindersPage() {
     const existingCount = reminders.filter(r => r.document_id === doc.id).length;
     const tone = AUTO_TONES[Math.min(existingCount, AUTO_TONES.length - 1)];
     const clientName = getClientName(doc.client_id);
-    const days = doc.due_date ? getDaysOverdue(doc.due_date) : 0;
-    const templates: Record<string, string> = {
-      amical: `Bonjour ${clientName},\n\nNous nous permettons de vous rappeler que la facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} est arrivée à échéance depuis ${days} jour(s).\n\nNous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.\n\nCordialement,`,
-      ferme: `${clientName},\n\nMalgré notre précédent rappel, la facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} reste impayée avec un retard de ${days} jours.\n\nNous vous demandons de régulariser cette situation sous 8 jours.\n\nCordialement,`,
-      "mise en demeure": `MISE EN DEMEURE\n\n${clientName},\n\nLa facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} demeure impayée malgré nos ${existingCount} relances précédentes (retard : ${days} jours).\n\nNous vous mettons en demeure de régler cette somme sous 8 jours.\n\nCordialement,`,
+    const days = doc.due_date ? getDaysOverdue(doc.due_date) : getDaysWaiting(doc);
+
+    // Templates spécifiques par type de document
+    const typeTemplates: Record<string, Record<string, string>> = {
+      facture: {
+        amical: `Bonjour ${clientName},\n\nNous nous permettons de vous rappeler que la facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} est arrivée à échéance depuis ${days} jour(s).\n\nNous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.\n\nCordialement,`,
+        ferme: `${clientName},\n\nMalgré notre précédent rappel, la facture ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)} reste impayée avec un retard de ${days} jours.\n\nNous vous demandons de régulariser cette situation sous 8 jours.\n\nCordialement,`,
+        "mise en demeure": `MISE EN DEMEURE\n\n${clientName},\n\nLa facture ${doc.number} demeure impayée malgré nos ${existingCount} relances (retard : ${days} jours).\n\nNous vous mettons en demeure de régler ${formatCurrency(doc.total_ttc)} sous 8 jours.\n\nCordialement,`,
+      },
+      devis: {
+        amical: `Bonjour ${clientName},\n\nNous revenons vers vous au sujet du devis ${doc.number} d'un montant de ${formatCurrency(doc.total_ttc)}, resté sans réponse depuis ${days} jour(s).\n\nN'hésitez pas à nous contacter pour toute question ou ajustement.\n\nCordialement,`,
+        ferme: `${clientName},\n\nNotre devis ${doc.number} (${formatCurrency(doc.total_ttc)}) est toujours en attente de votre validation après ${days} jours.\n\nMerci de nous confirmer votre décision sous 5 jours afin que nous puissions organiser notre planning.\n\nCordialement,`,
+        "mise en demeure": `${clientName},\n\nSans retour de votre part, le devis ${doc.number} sera considéré comme caduc à l'issue d'un délai de 48h.\n\nCordialement,`,
+      },
+      contrat: {
+        amical: `Bonjour ${clientName},\n\nNous vous rappelons que le contrat ${doc.number} est en attente de votre signature depuis ${days} jour(s).\n\nMerci de bien vouloir nous retourner le document signé.\n\nCordialement,`,
+        ferme: `${clientName},\n\nLe contrat ${doc.number} reste non signé depuis ${days} jours. Nous vous demandons de le retourner signé sous 8 jours afin de poursuivre notre collaboration.\n\nCordialement,`,
+        "mise en demeure": `${clientName},\n\nEn l'absence de signature du contrat ${doc.number} sous 48h, nous serons contraints d'annuler notre engagement et de proposer notre disponibilité à d'autres clients.\n\nCordialement,`,
+      },
+      bon_commande: {
+        amical: `Bonjour ${clientName},\n\nNous revenons vers vous concernant le bon de commande ${doc.number} (${formatCurrency(doc.total_ttc)}), en attente de confirmation de réception depuis ${days} jour(s).\n\nCordialement,`,
+        ferme: `${clientName},\n\nLe bon de commande ${doc.number} n'a pas encore été réceptionné après ${days} jours. Merci de confirmer la réception sous 5 jours.\n\nCordialement,`,
+        "mise en demeure": `${clientName},\n\nSans confirmation de réception du bon de commande ${doc.number} sous 48h, nous initierons une procédure de litige.\n\nCordialement,`,
+      },
+      ordre_mission: {
+        amical: `Bonjour ${clientName},\n\nNous vous rappelons que l'ordre de mission ${doc.number} est en attente de votre acceptation depuis ${days} jour(s).\n\nCordialement,`,
+        ferme: `${clientName},\n\nL'ordre de mission ${doc.number} reste sans acceptation après ${days} jours. Merci de nous confirmer votre accord sous 5 jours.\n\nCordialement,`,
+        "mise en demeure": `${clientName},\n\nSans acceptation de l'ordre de mission ${doc.number} sous 48h, nous annulerons la prestation planifiée.\n\nCordialement,`,
+      },
+      fiche_intervention: {
+        amical: `Bonjour ${clientName},\n\nNous revenons vers vous concernant la fiche d'intervention ${doc.number}, en attente de clôture depuis ${days} jour(s).\n\nMerci de nous confirmer la fin des travaux.\n\nCordialement,`,
+        ferme: `${clientName},\n\nLa fiche d'intervention ${doc.number} n'a pas été clôturée après ${days} jours. Merci de régulariser la situation sous 48h.\n\nCordialement,`,
+        "mise en demeure": `${clientName},\n\nSans clôture de la fiche ${doc.number} sous 24h, nous procéderons à la facturation automatique de la prestation.\n\nCordialement,`,
+      },
     };
+
+    const tplSet = typeTemplates[doc.type] ?? typeTemplates.facture;
     const nextPriority = existingCount >= 2 ? "critical" as const : existingCount >= 1 ? "high" as const : "medium" as const;
-    const payload = { document_id: doc.id, channel: "email" as const, priority: nextPriority, content: templates[tone] ?? templates.amical, ai_generated: false };
+    const payload = { document_id: doc.id, channel: "email" as const, priority: nextPriority, content: tplSet[tone] ?? tplSet.amical, ai_generated: false };
     try { await saveReminderDB(payload); await refreshReminders(); }
     catch { saveReminderLS(payload); }
   }
@@ -258,7 +321,7 @@ export default function RemindersPage() {
 
   return (
     <PageTransition>
-      <Topbar title="Relances" subtitle={`${overdueInvoices.length} facture${overdueInvoices.length > 1 ? "s" : ""} en retard`} />
+      <Topbar title="Relances" subtitle={`${overdueInvoices.length} facture${overdueInvoices.length > 1 ? "s" : ""} en retard${pendingDocs.length > 0 ? ` · ${pendingDocs.length} document${pendingDocs.length > 1 ? "s" : ""} en attente` : ""}`} />
       <div className="p-6 space-y-6">
         {/* Confirmation auto-relance programmée */}
         {autoNextMsg && (
@@ -395,6 +458,85 @@ export default function RemindersPage() {
               })}
             </div>
             {overdueInvoices.some((d) => d.client_id in autoOverrides) && (
+              <p className="text-[10px] font-sans text-atlantic-200/30 mt-3">✱ Override individuel — différent du réglage global</p>
+            )}
+          </GlassCard>
+        )}
+
+        {/* ── Documents en attente (hors factures) ── */}
+        {pendingDocs.length > 0 && (
+          <GlassCard hover={false} className="border-amber-400/15">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-amber-400" />
+                <div>
+                  <p className="text-sm font-sans font-semibold text-amber-400">{pendingDocs.length} document{pendingDocs.length > 1 ? "s" : ""} en attente</p>
+                  <p className="text-[10px] font-sans text-atlantic-200/40">Devis, contrats, commandes, missions non clôturés</p>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {pendingDocs.map((doc) => {
+                const cfg = PENDING_DOC_CONFIG[doc.type];
+                const days = getDaysWaiting(doc);
+                const sentCount = reminders.filter(r => r.document_id === doc.id && r.sent_at).length;
+                const maxReached = sentCount >= autoDelays.length;
+                const effective = getEffectiveAuto(doc.client_id);
+                const isOverride = doc.client_id in autoOverrides;
+                return (
+                  <div key={doc.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg border gap-3 ${maxReached ? "bg-red-400/5 border-red-400/15" : `bg-atlantic-800/40 ${cfg?.color ?? "border-atlantic-600/15"}`}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-sans font-medium text-white truncate">
+                          {doc.number} — {getClientName(doc.client_id)}
+                        </p>
+                        {maxReached ? (
+                          <span className="shrink-0 text-[10px] font-sans font-semibold px-2 py-0.5 rounded-full bg-red-400/15 text-red-400 border border-red-400/20">
+                            Contentieux
+                          </span>
+                        ) : (
+                          <span className="shrink-0 text-[10px] font-sans px-2 py-0.5 rounded-full bg-atlantic-700/60 text-atlantic-200/50">
+                            {cfg?.alertLabel ?? doc.type}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] font-sans text-atlantic-200/40">
+                        {formatCurrency(doc.total_ttc)} · {days} j d&apos;attente
+                        {sentCount > 0 && ` · ${sentCount}/${autoDelays.length} relance${sentCount > 1 ? "s" : ""} envoyée${sentCount > 1 ? "s" : ""}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <button
+                        onClick={() => { sessionStorage.setItem("open_doc_id", doc.id); router.push("/documents"); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-atlantic-700/50 border border-atlantic-500/20 text-atlantic-200/60 text-xs font-sans hover:text-white hover:border-atlantic-400/40 transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Voir
+                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[10px] font-sans ${effective ? "text-gold-400" : "text-atlantic-200/30"}`}>
+                          Auto{isOverride ? " ✱" : ""}
+                        </span>
+                        <button
+                          onClick={() => toggleAutoClient(doc.client_id)}
+                          className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${effective ? "bg-gold-400" : "bg-atlantic-600/60"}`}
+                        >
+                          <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform duration-200 ${effective ? "translate-x-4" : "translate-x-0.5"}`} />
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => quickCreateReminder(doc)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gold-400/10 border border-gold-400/20 text-gold-400 text-xs font-sans font-medium hover:bg-gold-400/20 hover:border-gold-400/40 transition-colors"
+                      >
+                        <Send className="w-3 h-3" />
+                        {cfg?.actionLabel ?? "Relancer"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {pendingDocs.some((d) => d.client_id in autoOverrides) && (
               <p className="text-[10px] font-sans text-atlantic-200/30 mt-3">✱ Override individuel — différent du réglage global</p>
             )}
           </GlassCard>

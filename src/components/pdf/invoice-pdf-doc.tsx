@@ -76,6 +76,21 @@ const TYPE_LABELS: Record<string, string> = {
   devis: "DEVIS",
   avoir: "AVOIR",
   bon_livraison: "BON DE LIVRAISON",
+  contrat: "CONTRAT",
+  ordre_mission: "ORDRE DE MISSION",
+  fiche_intervention: "FICHE D'INTERVENTION",
+  recu: "REÇU",
+  bon_commande: "BON DE COMMANDE",
+};
+
+const DUE_DATE_LABELS: Record<string, string> = {
+  facture: "Échéance",
+  devis: "Validité",
+  bon_livraison: "Date de livraison",
+  ordre_mission: "Fin de mission",
+  fiche_intervention: "Date d'intervention",
+  bon_commande: "Date de livraison",
+  contrat: "Date de fin",
 };
 
 export function InvoicePDFDocument({
@@ -114,7 +129,7 @@ export function InvoicePDFDocument({
             <Text style={s.docType}>{TYPE_LABELS[doc.type] || "DOCUMENT"}</Text>
             <Text style={s.docNumber}>{doc.number}</Text>
             <Text style={s.docMeta}>Date : {fDate(doc.date)}</Text>
-            {doc.due_date && <Text style={s.docMeta}>Échéance : {fDate(doc.due_date)}</Text>}
+            {doc.due_date && <Text style={s.docMeta}>{DUE_DATE_LABELS[doc.type] ?? "Échéance"} : {fDate(doc.due_date)}</Text>}
           </View>
         </View>
 
@@ -181,7 +196,7 @@ export function InvoicePDFDocument({
           </View>
         )}
 
-        {(organization.rib_iban || organization.rib_bic) && (
+        {(organization.rib_iban || organization.rib_bic) && ["facture", "avoir", "recu", "bon_commande"].includes(doc.type) && (
           <View style={s.ribBlock}>
             <Text style={s.ribLabel}>Coordonnées bancaires</Text>
             {organization.rib_iban && <Text style={s.ribText}>IBAN : {organization.rib_iban}</Text>}
@@ -203,10 +218,12 @@ export function InvoicePDFDocument({
               {organization.tva_number ? ` — TVA ${organization.tva_number}` : ""}
             </Text>
           )}
-          <Text style={s.footerText}>
-            En cas de retard de paiement, une pénalité de 3x le taux d&apos;intérêt légal sera
-            appliquée, ainsi qu&apos;une indemnité forfaitaire de 40 € pour frais de recouvrement.
-          </Text>
+          {["facture", "avoir", "bon_commande"].includes(doc.type) && (
+            <Text style={s.footerText}>
+              En cas de retard de paiement, une pénalité de 3x le taux d&apos;intérêt légal sera
+              appliquée, ainsi qu&apos;une indemnité forfaitaire de 40 € pour frais de recouvrement.
+            </Text>
+          )}
           {(organization.regime_tva === "franchise_base" || organization.regime_tva === "exonere") &&
             (doc.type === "facture" || doc.type === "avoir") && (
             <Text style={[s.footerText, { fontFamily: "Helvetica-Bold" }]}>

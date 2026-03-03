@@ -488,6 +488,36 @@ export default function DocumentsPage() {
     setView("detail");
   }
 
+  async function convertDevisToFacture(devis: Doc) {
+    try {
+      const factureNumber = await generateDocumentNumberDB("facture");
+      const facture = await saveDocumentDB({
+        client_id: devis.client_id,
+        type: "facture",
+        number: factureNumber,
+        date: new Date().toISOString().split("T")[0],
+        due_date: null,
+        total_ht: devis.total_ht,
+        total_tva: devis.total_tva,
+        total_ttc: devis.total_ttc,
+        discount_percent: devis.discount_percent,
+        discount_amount: devis.discount_amount,
+        notes: `Facture générée depuis le devis ${devis.number}`,
+        status: "brouillon",
+        source_document_id: devis.id,
+      });
+      const lines = await getDocumentLinesDB(devis.id);
+      if (lines.length > 0) {
+        await replaceDocumentLinesDB(facture.id, lines.map((l) => ({ ...l, id: undefined })));
+      }
+      // Marquer le devis comme accepté
+      await saveDocumentDB({ ...devis, status: "paye" });
+      await refreshDocuments();
+      // Ouvrir la nouvelle facture
+      await openDetail(facture);
+    } catch { /* silencieux */ }
+  }
+
   async function generateRecu(facture: Doc) {
     try {
       const recuNumber = await generateDocumentNumberDB("recu");
@@ -924,6 +954,7 @@ export default function DocumentsPage() {
             getClientName={getClientName}
             onBack={() => setView("list")}
             onUpdateStatus={(s) => { updateStatus(selectedDoc, s); }}
+            onConvertToFacture={() => convertDevisToFacture(selectedDoc)}
             onDelete={() => handleDeleteDoc(selectedDoc.id)}
             onRefresh={refreshDocuments}
             onEdit={() => openEdit(selectedDoc, selectedLines)}
@@ -1047,13 +1078,14 @@ function InvoicePreview({ doc, lines, clientName }: { doc: Doc; lines: DocumentL
 // Document Detail with Validation N+1
 // ═══════════════════════════════════════════
 
-function DocumentDetail({ doc, lines, clients, getClientName, onBack, onUpdateStatus, onDelete, onRefresh, onEdit }: {
+function DocumentDetail({ doc, lines, clients, getClientName, onBack, onUpdateStatus, onConvertToFacture, onDelete, onRefresh, onEdit }: {
   doc: Doc;
   lines: DocumentLine[];
   clients: Client[];
   getClientName: (id: string) => string;
   onBack: () => void;
   onUpdateStatus: (status: string) => void;
+  onConvertToFacture: () => void;
   onDelete: () => void;
   onRefresh: () => void;
   onEdit: () => void;
@@ -1135,10 +1167,14 @@ function DocumentDetail({ doc, lines, clients, getClientName, onBack, onUpdateSt
                 {doc.status === "envoye" && doc.type === "devis" && (
                   <>
                     <PremiumButton size="sm" icon={<Check className="w-3.5 h-3.5" />} onClick={() => onUpdateStatus("paye")}>Accepté</PremiumButton>
+                    <PremiumButton size="sm" icon={<ArrowRight className="w-3.5 h-3.5" />} onClick={onConvertToFacture}>→ Facture</PremiumButton>
                     <button onClick={() => onUpdateStatus("refuse")} className="px-3 py-1.5 rounded-lg text-xs font-sans bg-red-400/10 text-red-400 hover:bg-red-400/20 transition-colors">
                       Refusé
                     </button>
                   </>
+                )}
+                {doc.status === "paye" && doc.type === "devis" && (
+                  <PremiumButton size="sm" icon={<ArrowRight className="w-3.5 h-3.5" />} onClick={onConvertToFacture}>→ Convertir en facture</PremiumButton>
                 )}
                 {doc.status === "envoye" && doc.type === "contrat" && (
                   <>
