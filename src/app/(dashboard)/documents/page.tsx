@@ -1005,13 +1005,13 @@ function InvoicePreview({ doc, lines, clientName }: { doc: Doc; lines: DocumentL
       <div className="bg-white text-gray-900 rounded-lg p-8 shadow-lg print:shadow-none print:p-0 text-[13px] leading-relaxed" id="invoice-preview">
         <div className="flex justify-between items-start mb-8 border-b-2 border-amber-500 pb-6">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">{org.name || "Votre Entreprise"}</h2>
-            {org.address && <p className="text-gray-500 mt-1">{org.address}</p>}
-            {(org.postal_code || org.city) && <p className="text-gray-500">{org.postal_code} {org.city}</p>}
-            {org.phone && <p className="text-gray-500">Tél : {org.phone}</p>}
-            {org.email && <p className="text-gray-500">{org.email}</p>}
-            {org.siret && <p className="text-gray-400 text-xs mt-2">SIRET : {org.siret}</p>}
-            {org.tva_number && <p className="text-gray-400 text-xs">TVA : {org.tva_number}</p>}
+            <h2 className="text-2xl font-bold text-gray-900">{org?.name || "Votre Entreprise"}</h2>
+            {org?.address && <p className="text-gray-500 mt-1">{org.address}</p>}
+            {(org?.postal_code || org?.city) && <p className="text-gray-500">{org?.postal_code} {org?.city}</p>}
+            {org?.phone && <p className="text-gray-500">Tél : {org.phone}</p>}
+            {org?.email && <p className="text-gray-500">{org.email}</p>}
+            {org?.siret && <p className="text-gray-400 text-xs mt-2">SIRET : {org.siret}</p>}
+            {org?.tva_number && <p className="text-gray-400 text-xs">TVA : {org.tva_number}</p>}
           </div>
           <div className="text-right">
             <h1 className="text-3xl font-bold text-amber-600">{typeLabels[doc.type] || "DOCUMENT"}</h1>
@@ -1072,15 +1072,15 @@ function InvoicePreview({ doc, lines, clientName }: { doc: Doc; lines: DocumentL
         )}
 
         <div className="mt-8 pt-4 border-t border-gray-200 text-[10px] text-gray-400 text-center space-y-0.5">
-          {org.name && <p>{org.name}{org.legal_form ? ` - ${org.legal_form}` : ""}{org.capital ? ` au capital de ${org.capital}€` : ""}</p>}
-          {org.rcs && <p>RCS {org.rcs}</p>}
-          {org.siret && <p>SIRET {org.siret} — TVA {org.tva_number || "N/A"}</p>}
-          {(org.rib_iban || org.rib_bic) && <p>IBAN : {org.rib_iban || "—"} — BIC : {org.rib_bic || "—"}</p>}
+          {org?.name && <p>{org.name}{org.legal_form ? ` - ${org.legal_form}` : ""}{org.capital ? ` au capital de ${org.capital}€` : ""}</p>}
+          {org?.rcs && <p>RCS {org.rcs}</p>}
+          {org?.siret && <p>SIRET {org.siret} — TVA {org.tva_number || "N/A"}</p>}
+          {(org?.rib_iban || org?.rib_bic) && <p>IBAN : {org?.rib_iban || "—"} — BIC : {org?.rib_bic || "—"}</p>}
           <p className="mt-2">En cas de retard de paiement, une pénalité de 3x le taux d&apos;intérêt légal sera appliquée, ainsi qu&apos;une indemnité forfaitaire de 40€ pour frais de recouvrement.</p>
-          {(org.regime_tva === "franchise_base" || org.regime_tva === "exonere") &&
+          {(org?.regime_tva === "franchise_base" || org?.regime_tva === "exonere") &&
             (doc.type === "facture" || doc.type === "avoir") && (
             <p className="mt-2 font-semibold text-amber-600">
-              {org.regime_tva === "franchise_base"
+              {org?.regime_tva === "franchise_base"
                 ? "TVA non applicable — art. 293 B du CGI"
                 : "Exonération de TVA — art. 261 du CGI"}
             </p>
