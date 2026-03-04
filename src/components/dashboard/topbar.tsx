@@ -125,7 +125,7 @@ export function Topbar({ title, subtitle, extra, rightExtra }: TopbarProps) {
       <div className="flex items-center gap-2">
         {rightExtra}
         <button
-          onClick={() => (window as unknown as Record<string, unknown>).__openSearch?.()}
+          onClick={() => (window as unknown as Record<string, (() => void) | undefined>).__openSearch?.()}
           className="p-2.5 rounded-xl text-atlantic-200/40 hover:text-gold-400 hover:bg-gold-400/10 transition-all duration-200"
           title="Recherche (Ctrl+K)"
         >
