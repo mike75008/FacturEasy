@@ -482,9 +482,15 @@ export default function DocumentsPage() {
     setSelectedDoc(doc);
     try {
       const linesData = await getDocumentLinesDB(doc.id);
-      setSelectedLines(linesData.length > 0 ? linesData : getDocumentLinesLS(doc.id));
+      if (linesData.length > 0) {
+        setSelectedLines(linesData);
+      } else {
+        const fallback = await getDocumentLinesLS(doc.id);
+        setSelectedLines(fallback);
+      }
     } catch {
-      setSelectedLines(getDocumentLinesLS(doc.id));
+      const fallback = await getDocumentLinesLS(doc.id);
+      setSelectedLines(fallback);
     }
     setView("detail");
   }
@@ -976,9 +982,14 @@ export default function DocumentsPage() {
 // ═══════════════════════════════════════════
 
 function InvoicePreview({ doc, lines, clientName }: { doc: Doc; lines: DocumentLine[]; clientName: string }) {
-  const org = getOrganization();
-  const client = getClient(doc.client_id);
+  const [org, setOrg] = useState<Organization | null>(null);
+  const [client, setClient] = useState<import("@/types/database").Client | null>(null);
   const typeLabels: Record<string, string> = { facture: "FACTURE", devis: "DEVIS", avoir: "AVOIR", bon_livraison: "BON DE LIVRAISON", contrat: "CONTRAT", ordre_mission: "ORDRE DE MISSION", fiche_intervention: "FICHE D'INTERVENTION", recu: "REÇU", bon_commande: "BON DE COMMANDE" };
+
+  useEffect(() => {
+    getOrganization().then(setOrg).catch(() => {});
+    getClient(doc.client_id).then(setClient).catch(() => {});
+  }, [doc.client_id]);
 
   function handlePrint() {
     window.print();
@@ -1337,15 +1348,16 @@ function DocumentDetail({ doc, lines, clients, getClientName, onBack, onUpdateSt
               <div className="space-y-3">
                 {validations.map((v) => (
                   <div key={v.id} className="flex items-start gap-2">
-                    {v.action === "approve" && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mt-0.5" />}
-                    {v.action === "reject" && <XCircle className="w-3.5 h-3.5 text-red-400 mt-0.5" />}
-                    {v.action === "request_changes" && <MessageSquare className="w-3.5 h-3.5 text-amber-400 mt-0.5" />}
+                    {v.result.passed ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mt-0.5" />
+                    ) : (
+                      <XCircle className="w-3.5 h-3.5 text-red-400 mt-0.5" />
+                    )}
                     <div>
                       <p className="text-xs font-sans text-white">
-                        {v.user_name} - {v.action === "approve" ? "Approuvé" : v.action === "reject" ? "Rejeté" : "Modifications demandées"}
+                        {v.result.passed ? "Approuvé" : "Rejeté"}
                       </p>
-                      {v.comment && <p className="text-[10px] font-sans text-atlantic-200/40 italic">{v.comment}</p>}
-                      <p className="text-[10px] font-sans text-atlantic-200/30">{new Date(v.created_at).toLocaleString("fr-FR")}</p>
+                      <p className="text-[10px] font-sans text-atlantic-200/30">{new Date(v.checkedAt).toLocaleString("fr-FR")}</p>
                     </div>
                   </div>
                 ))}
