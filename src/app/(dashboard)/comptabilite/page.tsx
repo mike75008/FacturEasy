@@ -72,7 +72,7 @@ export default function ComptabilitePage() {
     getOrganizationDB()
       .then((orgData) => {
         const lsOrg = getOrganizationLS();
-        setOrg({ ...orgData, regime_tva: orgData.regime_tva ?? lsOrg.regime_tva });
+        if (orgData) setOrg({ ...orgData, regime_tva: orgData.regime_tva ?? lsOrg.regime_tva });
       })
       .catch(() => setOrg(getOrganizationLS()));
     const stored = localStorage.getItem("compta_seuil_type") as "services" | "commerce" | null;
