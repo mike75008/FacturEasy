@@ -174,6 +174,7 @@ export function saveClient(data: Partial<Client> & { id?: string }): Client {
     }
   }
 
+  const { sector, id: _dataId, ...rest } = data;
   const newClient: Client = {
     organization_id: "org-default",
     type: "professionnel",
@@ -192,7 +193,8 @@ export function saveClient(data: Partial<Client> & { id?: string }): Client {
     notes: null,
     created_at: now(),
     updated_at: now(),
-    ...data,
+    ...rest,
+    sector: sector ?? null,
     id: generateId(),
   };
   clients.push(newClient);
@@ -296,6 +298,7 @@ export function saveDocument(data: Partial<Document> & { id?: string }): Documen
     created_at: now(),
     updated_at: now(),
     ...data,
+    paid_at: data.paid_at ?? null,
     id: generateId(),
   };
   documents.push(newDoc);
