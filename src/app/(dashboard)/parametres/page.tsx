@@ -788,7 +788,7 @@ function ImportWizard({ onComplete }: { onComplete: () => void }) {
         </div>
 
         <div className="flex gap-2">
-          <PremiumButton onClick={handleImport} icon={<Check className="w-4 h-4" />}>
+          <PremiumButton onClick={() => handleImport()} icon={<Check className="w-4 h-4" />}>
             Importer {parsed.rows.length} lignes
           </PremiumButton>
           <PremiumButton variant="ghost" onClick={() => { setStep("idle"); setParsed(null); setAiMapping(null); }}>
