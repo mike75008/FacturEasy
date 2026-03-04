@@ -72,7 +72,7 @@ export default function AssistantPage() {
     getOrganization()
       .then((orgData) => {
         const lsOrg = getOrganizationLS();
-        const merged = { ...orgData, regime_tva: orgData.regime_tva ?? lsOrg.regime_tva };
+        const merged = { ...orgData, regime_tva: orgData?.regime_tva ?? lsOrg.regime_tva };
         setOrg(merged);
         if (orgData?.name) setOrgName(orgData.name);
       })
