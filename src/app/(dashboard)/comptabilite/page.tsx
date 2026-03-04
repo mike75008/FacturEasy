@@ -868,7 +868,7 @@ export default function ComptabilitePage() {
               <p className="text-xs font-sans text-atlantic-200/60 leading-relaxed">
                 Vos prestations sont exonérées de TVA — aucune CA3 à déposer. Conservez vos justificatifs pour votre
                 déclaration de revenus annuelle (formulaire 2035 BNC, 2031 BIC, ou IS selon votre structure juridique).
-                Mention obligatoire sur vos factures selon l'article applicable (art. 261 CGI).
+                Mention obligatoire sur vos factures selon l&apos;article applicable (art. 261 CGI).
               </p>
             </div>
           </GlassCard>

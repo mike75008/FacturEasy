@@ -490,7 +490,7 @@ export function DeclarationBlock({ children }: { children: React.ReactNode }) {
                     </div>
                   </div>
                   <div className="border-t border-gold-400/10 pt-3">
-                    <p className="text-xs font-sans text-atlantic-200/40">Si tu ne déclares pas aujourd'hui</p>
+                    <p className="text-xs font-sans text-atlantic-200/40">Si tu ne déclares pas aujourd&apos;hui</p>
                     <p className="text-lg font-display font-semibold text-white/70">{formatCurrency(decl.solde + decl.penaltyAmount)} au lieu de {formatCurrency(decl.solde)}</p>
                   </div>
                 </>
@@ -528,13 +528,13 @@ export function DeclarationBlock({ children }: { children: React.ReactNode }) {
                 onClick={() => markDone(decl.periodKey)}
                 className="w-full py-3 rounded-xl border border-gold-400/20 text-gold-400 hover:bg-gold-400/10 font-sans text-sm transition-colors"
               >
-                J'ai déclaré, rétablir mon accès
+                J&apos;ai déclaré, rétablir mon accès
               </button>
             </div>
           )}
 
           <p className="text-[11px] font-sans text-atlantic-200/20 leading-relaxed">
-            L'accès complet est rétabli automatiquement dès que ta déclaration est validée.
+            L&apos;accès complet est rétabli automatiquement dès que ta déclaration est validée.
           </p>
         </div>
       </div>

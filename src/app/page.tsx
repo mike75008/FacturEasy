@@ -194,7 +194,7 @@ export default function HomePage() {
             <br />
             <span className="animated-gold-text">avec FacturEasy</span>
             <br />
-        l'outil de facturation pour tous 
+        l&apos;outil de facturation pour tous
           </h1>
 
           <p className="text-xl md:text-2xl text-atlantic-200/70 font-body max-w-3xl mx-auto mb-10">
