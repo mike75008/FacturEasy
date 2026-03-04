@@ -120,6 +120,8 @@ export function createTicket(
     scheduledCheckAt: null,
     autoRelance: false,
     autoRelanceDelay: 7,
+    relanceTone: "amical",
+    relanceStep: 0,
     activities: [{ timestamp: now, action: "created", note: null }],
   };
   localStorage.setItem(KEY, JSON.stringify([ticket, ...getTickets()]));
