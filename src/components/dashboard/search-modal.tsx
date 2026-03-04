@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Search, X, FileText, Users, Package, Maximize2, Minimize2 } from "lucide-react";
 import { getDocuments, getClients, getProducts, computeNotifications } from "@/lib/supabase/data";
-import type { Document as Doc, Client, Product, AppNotification, NotificationColor } from "@/lib/supabase/data";
+import type { AppNotification, NotificationColor } from "@/lib/supabase/data";
+import type { Document as Doc, Client, Product } from "@/types/database";
 import { useRouter } from "next/navigation";
 
 interface SearchModalProps {
