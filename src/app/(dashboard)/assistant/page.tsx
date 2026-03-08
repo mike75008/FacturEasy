@@ -65,6 +65,7 @@ export default function AssistantPage() {
   const [orgName, setOrgName] = useState("votre entreprise");
   const [org, setOrg] = useState<Organization | null>(null);
   const [declarations, setDeclarations] = useState<DeclarationTVA[]>([]);
+  const [mobileTab, setMobileTab] = useState<"sam" | "helena">("helena");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -294,10 +295,39 @@ Réponds en français. Précis, structuré, avec le contexte légal quand c'est 
           subtitle="Sam · Helena — deux conseillers, zéro langue de bois"
         />
 
+        {/* Onglets mobile Sam / Helena */}
+        <div className="md:hidden flex border-b border-gold-400/10">
+          <button
+            onClick={() => setMobileTab("sam")}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 text-xs font-sans font-semibold transition-colors ${
+              mobileTab === "sam"
+                ? "text-amber-300 border-b-2 border-amber-400"
+                : "text-atlantic-200/40 hover:text-white"
+            }`}
+          >
+            <div className="w-4 h-4 rounded-md bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-[8px] font-bold text-amber-300">S</div>
+            Sam
+            {threads.length > 0 && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-400/20 text-red-300 font-bold">{threads.length}</span>
+            )}
+          </button>
+          <button
+            onClick={() => setMobileTab("helena")}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 text-xs font-sans font-semibold transition-colors ${
+              mobileTab === "helena"
+                ? "text-violet-300 border-b-2 border-violet-400"
+                : "text-atlantic-200/40 hover:text-white"
+            }`}
+          >
+            <div className="w-4 h-4 rounded-md bg-violet-400/20 border border-violet-400/30 flex items-center justify-center text-[8px] font-bold text-violet-300">H</div>
+            Helena
+          </button>
+        </div>
+
         <div className="flex flex-1 overflow-hidden">
 
           {/* ══ CANAL SAM ══ */}
-          <div className="w-[380px] flex-shrink-0 border-r border-gold-400/10 flex flex-col overflow-hidden">
+          <div className={`flex-shrink-0 border-r border-gold-400/10 flex flex-col overflow-hidden w-full md:w-[380px] ${mobileTab === "sam" ? "flex" : "hidden md:flex"}`}>
 
             {/* Header Sam */}
             <div className="px-4 py-3 border-b border-amber-400/10 bg-amber-400/[0.02] flex items-center gap-2.5">
@@ -406,7 +436,7 @@ Réponds en français. Précis, structuré, avec le contexte légal quand c'est 
           </div>
 
           {/* ══ CANAL HELENA ══ */}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className={`flex-1 flex flex-col overflow-hidden ${mobileTab === "helena" ? "flex" : "hidden md:flex"}`}>
 
             {/* Header Helena */}
             <div className="px-6 py-3 border-b border-violet-400/10 bg-violet-400/[0.02] flex items-center gap-2.5">

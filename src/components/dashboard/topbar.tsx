@@ -121,6 +121,8 @@ export function Topbar({ title, subtitle, extra, rightExtra }: TopbarProps) {
           )}
         </div>
       )}
+      {/* Espace pour le titre sur mobile — évite que la cloche chevauche le texte */}
+      <div className="flex-1 md:hidden" />
 
       <div className="flex items-center gap-2">
         {rightExtra}
@@ -220,6 +222,20 @@ export function Topbar({ title, subtitle, extra, rightExtra }: TopbarProps) {
         </div>
       </div>
     </header>
+
+    {/* Bannière alerte mobile — visible uniquement sur smartphone */}
+    {activeNotif && activeNotif.color !== "green" && (
+      <div className={`md:hidden flex items-center gap-2 px-4 py-2 border-b ${COLOR_MAP[activeNotif.color].bg} border-${activeNotif.color}-400/20`}>
+        <span className="text-sm flex-shrink-0">{EMOJI_MAP[activeNotif.color]}</span>
+        <span className={`text-xs font-sans font-semibold flex-shrink-0 ${COLOR_MAP[activeNotif.color].text}`}>{activeNotif.title}</span>
+        {activeNotif.message && (
+          <span className="text-xs font-sans text-atlantic-200/50 truncate">— {activeNotif.message}</span>
+        )}
+        {tickerList.length > 1 && (
+          <span className="text-[9px] font-sans text-atlantic-200/30 ml-auto flex-shrink-0">{tickerIndex % tickerList.length + 1}/{tickerList.length}</span>
+        )}
+      </div>
+    )}
 
     </>
   );

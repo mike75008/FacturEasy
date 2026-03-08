@@ -1516,12 +1516,36 @@ export default function ParametresPage() {
   return (
     <PageTransition>
       <Topbar title="Paramètres" subtitle="Réglages de l'application" />
-      <div className="p-6">
+      {/* Navigation sections — horizontale scrollable sur mobile, verticale sur desktop */}
+      <div className="md:hidden px-4 pb-2 overflow-x-auto">
+        <div className="flex gap-2 w-max">
+          {SECTIONS.map((section) => {
+            const isActive = section.id === active;
+            return (
+              <button
+                key={section.id}
+                onClick={() => setActive(section.id)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-sans font-medium whitespace-nowrap transition-colors flex-shrink-0",
+                  isActive
+                    ? "bg-gold-400/10 border border-gold-400/20 text-gold-400"
+                    : "text-atlantic-200/50 border border-white/5 hover:text-white"
+                )}
+              >
+                <section.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                {section.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="p-4 md:p-6">
         <GlassCard hover={false} className="!p-0 overflow-hidden">
           <div className="flex min-h-[600px]">
 
-            {/* Menu latéral interne */}
-            <div className="w-56 flex-shrink-0 border-r border-gold-400/10 p-3 space-y-1">
+            {/* Menu latéral interne — desktop uniquement */}
+            <div className="hidden md:block w-56 flex-shrink-0 border-r border-gold-400/10 p-3 space-y-1">
               {SECTIONS.map((section) => {
                 const isActive = section.id === active;
                 return (
@@ -1543,7 +1567,7 @@ export default function ParametresPage() {
             </div>
 
             {/* Contenu de la section */}
-            <div className="flex-1 p-6 overflow-y-auto">
+            <div className="flex-1 p-4 md:p-6 overflow-y-auto min-w-0">
               <div className="mb-6">
                 <h3 className="text-lg font-display font-semibold text-white flex items-center gap-2">
                   <activeSection.icon className="w-5 h-5 text-gold-400" />

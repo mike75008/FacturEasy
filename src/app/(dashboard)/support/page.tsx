@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Topbar } from "@/components/dashboard/topbar";
 import { GlassCard } from "@/components/premium/glass-card";
 import { PageTransition } from "@/components/premium/page-transition";
-import { CheckCircle2, Inbox, Plus, Trash2, Send, X, AlertCircle, RotateCcw, Zap, Clock } from "lucide-react";
+import { CheckCircle2, Inbox, Plus, Trash2, Send, X, AlertCircle, RotateCcw, Zap, Clock, ArrowLeft } from "lucide-react";
 import {
   getTickets, markTicketRead, resolveTicket, deleteTicket,
   addTicketActivity, createTicket, reopenTicket, updateTicketAutoRelance, getDisplayId,
@@ -65,10 +65,14 @@ export default function SupportPage() {
     }
   }
 
+  // Mobile : "list" | "detail"
+  const [mobilePanel, setMobilePanel] = useState<"list" | "detail">("list");
+
   function handleSelect(ticket: Ticket) {
     setShowForm(false);
     markTicketRead(ticket.id);
     refresh(ticket.id);
+    setMobilePanel("detail");
   }
 
   function handleResolve(id: string) {
@@ -151,12 +155,16 @@ export default function SupportPage() {
 
         <div className="flex flex-1 overflow-hidden">
 
-          {/* ── Liste gauche ── */}
-          <div className="w-[380px] flex-shrink-0 border-r border-gold-400/10 flex flex-col overflow-hidden">
+          {/* ── Liste gauche — masquée sur mobile quand un ticket est ouvert ── */}
+          <div className={`
+            flex-shrink-0 border-r border-gold-400/10 flex flex-col overflow-hidden
+            w-full md:w-[380px]
+            ${mobilePanel === "detail" ? "hidden md:flex" : "flex"}
+          `}>
             <div className="px-4 py-3 border-b border-gold-400/10 flex items-center justify-between">
               <p className="text-xs font-sans font-semibold text-white">Tickets support</p>
               <button
-                onClick={() => { setShowForm(true); setSelected(null); }}
+                onClick={() => { setShowForm(true); setSelected(null); setMobilePanel("detail"); }}
                 className="flex items-center gap-1 text-[10px] font-sans px-2.5 py-1 rounded-lg bg-violet-400/10 text-violet-300 hover:bg-violet-400/20 transition-all"
               >
                 <Plus className="w-3 h-3" />
@@ -208,12 +216,23 @@ export default function SupportPage() {
             </div>
           </div>
 
-          {/* ── Panneau droit ── */}
-          <div className="flex-1 overflow-y-auto">
+          {/* ── Panneau droit — plein écran sur mobile ── */}
+          <div className={`
+            flex-1 overflow-y-auto
+            ${mobilePanel === "list" ? "hidden md:block" : "block"}
+          `}>
+            {/* Bouton retour mobile */}
+            <button
+              onClick={() => { setMobilePanel("list"); setSelected(null); setShowForm(false); }}
+              className="md:hidden flex items-center gap-2 px-4 py-3 text-xs font-sans text-atlantic-200/60 hover:text-white border-b border-gold-400/10 w-full transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Retour aux tickets
+            </button>
             {showForm ? (
               <NewTicketForm
                 onSubmit={handleFormSubmit}
-                onCancel={() => setShowForm(false)}
+                onCancel={() => { setShowForm(false); setMobilePanel("list"); }}
               />
             ) : selected ? (
               <TicketDetail
