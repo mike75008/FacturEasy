@@ -35,7 +35,8 @@
       "Bash(git:*)",
       "Bash(wc:*)",
       "Bash(powershell.exe:*)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(head:*)"
     ]
   }
 }

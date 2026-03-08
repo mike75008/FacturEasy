@@ -67,7 +67,7 @@ git commit -m "Phase 10 : assistant IA contextuel bas-droite + recherche globale
 
 
  git add .
- git commit -m "eat: Pré-remplissage intelligent — réutilisation lignes, délai échéance auto, badge comportement paiement"
+ git commit -m "feat: Relances — pagination numérotée + recherche factures en retard"
 
 
 Facture en retard Envoyée mais non payée après date d'échéance -
@@ -105,6 +105,16 @@ Chaque mois tu collectes de la TVA pour le compte de l'État — il faut la lui 
   Et pour le niveau 1 (bannière J-7, encore sympa) :
 
   "Hé, ta déclaration TVA dans 5 jours. J'ai tout prêt quand tu veux."
+
+
+
+ - Clic Amical → Basse + Fermeté 1/3
+  - Clic Ferme → Moyenne + Fermeté 2/3
+  - Clic Mise en demeure → Haute + Fermeté 3/3
+  - Badge IA toujours visible sur toutes les relances
+  - Renommage nextToneOverrides → cardToneOverrides
+  - Indicateur "Fermeté X/3" (degré, pas comptage)
+
 
 
 
