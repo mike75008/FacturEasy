@@ -19,7 +19,8 @@ import {
   markReminderSent,
 } from "@/lib/supabase/data";
 import { useAppContext } from "@/lib/context/app-context";
-import { ModeGate } from "@/components/dashboard/mode-gate";
+import { ModeGate, useModePreview } from "@/components/dashboard/mode-gate";
+import { Lock } from "lucide-react";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { notifyRelanceSent, notifyContentieux } from "@/lib/notifications";
 import type { Reminder, Document as Doc, Client } from "@/types/database";
@@ -37,8 +38,9 @@ const CHANNEL_ICONS = {
   appel: Phone,
 };
 
-export default function RemindersPage() {
+function RemindersContent() {
   const router = useRouter();
+  const { isPreview } = useModePreview();
   const { reminders: ctxReminders, documents, clients, refreshReminders } = useAppContext();
   const [reminders, setReminders] = useState<Reminder[]>(ctxReminders);
   const [showCreate, setShowCreate] = useState(false);
@@ -395,28 +397,8 @@ export default function RemindersPage() {
   const overdueTotalPages = Math.max(1, Math.ceil(filteredOverdue.length / PAGE_SIZE));
   const overdueVisible = filteredOverdue.slice((overdueCurrentPage - 1) * PAGE_SIZE, overdueCurrentPage * PAGE_SIZE);
 
-  const { overdueTotal } = (() => {
-    const now = new Date();
-    const overdue = documents.filter(d => d.type === "facture" && d.status !== "paye" && d.status !== "annule" && d.due_date && new Date(d.due_date) < now);
-    return { overdueTotal: overdue.reduce((s, d) => s + d.total_ttc, 0) };
-  })();
-
   return (
     <PageTransition>
-      <ModeGate
-        requiredMode="intermediaire"
-        featureName="Relances"
-        samMessage={overdueTotal > 0
-          ? `Tu as ${overdueInvoices.length} facture${overdueInvoices.length > 1 ? "s" : ""} en retard pour un total de ${overdueTotal.toFixed(2).replace(".", ",")}€. Les relances automatiques règlent ça en général en 48h — c'est dans le plan Pro. Voici ce que ça ferait sur tes factures à toi.`
-          : "Les relances automatiques te permettent de récupérer tes paiements sans y penser. Sam envoie le bon message au bon moment — c'est dans le plan Pro."
-        }
-        benefits={[
-          "Relances automatiques par email au bon moment",
-          "Sam choisit le ton selon le client et le retard",
-          "Historique complet des relances envoyées",
-          "Relances manuelles par email, SMS ou appel",
-        ]}
-      >
       <Topbar title="Relances" subtitle={`${overdueInvoices.length} facture${overdueInvoices.length > 1 ? "s" : ""} en retard${pendingDocs.length > 0 ? ` · ${pendingDocs.length} document${pendingDocs.length > 1 ? "s" : ""} en attente` : ""}`} />
       <div className="p-6 space-y-6">
         {/* Confirmation auto-relance programmée */}
@@ -492,9 +474,16 @@ export default function RemindersPage() {
                   </p>
                 </div>
               </div>
-              <PremiumButton size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowCreate(true)}>
-                Créer une relance
-              </PremiumButton>
+              {isPreview ? (
+                <button disabled className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-atlantic-700/30 border border-atlantic-500/20 text-atlantic-200/30 text-xs font-sans cursor-not-allowed">
+                  <Lock className="w-3 h-3" />
+                  Créer une relance
+                </button>
+              ) : (
+                <PremiumButton size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setShowCreate(true)}>
+                  Créer une relance
+                </PremiumButton>
+              )}
             </div>
             {/* Recherche factures en retard */}
             <div className="relative mb-3">
@@ -726,7 +715,14 @@ export default function RemindersPage() {
 
             <div className="flex justify-end gap-2">
               <PremiumButton variant="ghost" onClick={() => { setShowCreate(false); setContent(""); }}>Annuler</PremiumButton>
-              <PremiumButton onClick={handleCreateReminder} icon={<Send className="w-4 h-4" />}>Créer la relance</PremiumButton>
+              {isPreview ? (
+                <button disabled className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-atlantic-700/30 border border-atlantic-500/20 text-atlantic-200/30 text-sm font-sans cursor-not-allowed">
+                  <Lock className="w-3.5 h-3.5" />
+                  Créer la relance
+                </button>
+              ) : (
+                <PremiumButton onClick={handleCreateReminder} icon={<Send className="w-4 h-4" />}>Créer la relance</PremiumButton>
+              )}
             </div>
           </GlassCard>
         )}
@@ -923,9 +919,16 @@ export default function RemindersPage() {
                                   className="w-10 px-1 py-0.5 text-[10px] font-sans font-semibold text-center rounded bg-atlantic-700/60 border border-atlantic-500/20 text-white focus:outline-none focus:border-gold-400/40"
                                 />
                                 <span className="text-[10px] font-sans text-atlantic-200/30">j</span>
-                                <PremiumButton variant="outline" size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => markSent(reminder)}>
-                                  Envoyer
-                                </PremiumButton>
+                                {isPreview ? (
+                                  <button disabled className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-atlantic-700/30 border border-atlantic-500/20 text-atlantic-200/30 text-[10px] font-sans cursor-not-allowed">
+                                    <Lock className="w-2.5 h-2.5" />
+                                    Envoyer
+                                  </button>
+                                ) : (
+                                  <PremiumButton variant="outline" size="sm" icon={<Send className="w-3.5 h-3.5" />} onClick={() => markSent(reminder)}>
+                                    Envoyer
+                                  </PremiumButton>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1024,7 +1027,34 @@ export default function RemindersPage() {
           </div>
         )}
       </div>
-      </ModeGate>
     </PageTransition>
+  );
+}
+
+export default function RemindersPage() {
+  const { documents } = useAppContext();
+  const now = new Date();
+  const overdueInvoices = documents.filter(
+    (d) => d.type === "facture" && d.status !== "paye" && d.status !== "annule" && !!d.due_date && new Date(d.due_date) < now
+  );
+  const overdueTotal = overdueInvoices.reduce((s, d) => s + d.total_ttc, 0);
+
+  return (
+    <ModeGate
+      requiredMode="intermediaire"
+      featureName="Relances"
+      samMessage={overdueTotal > 0
+        ? `Tu as ${overdueInvoices.length} facture${overdueInvoices.length > 1 ? "s" : ""} en retard pour un total de ${overdueTotal.toFixed(2).replace(".", ",")}€. Les relances automatiques règlent ça en général en 48h — c'est dans le plan Pro. Voici ce que ça ferait sur tes factures à toi.`
+        : "Les relances automatiques te permettent de récupérer tes paiements sans y penser. Sam envoie le bon message au bon moment — c'est dans le plan Pro."
+      }
+      benefits={[
+        "Relances automatiques par email au bon moment",
+        "Sam choisit le ton selon le client et le retard",
+        "Historique complet des relances envoyées",
+        "Relances manuelles par email, SMS ou appel",
+      ]}
+    >
+      <RemindersContent />
+    </ModeGate>
   );
 }

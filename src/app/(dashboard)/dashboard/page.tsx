@@ -360,41 +360,76 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* 4 indicateurs traduits */}
-            <div className="grid grid-cols-2 gap-px bg-amber-400/10 border-t border-amber-400/10">
-              {[
+            {/* 4 indicateurs visuels animés */}
+            {(() => {
+              const total = (stats.totalCA + stats.pendingTotal + stats.overdueTotal) || 1;
+              const sante = Math.round(stats.paymentRate);
+              const indicators = [
                 {
+                  emoji: "💰",
                   label: "Ce que tu as gagné",
                   value: formatCurrency(stats.totalCA),
                   sub: "encaissé ce mois",
-                  color: "text-emerald-400",
+                  barColor: "bg-emerald-400",
+                  barBg: "bg-emerald-400/15",
+                  pct: Math.min(Math.round((stats.totalCA / total) * 100), 100),
+                  textColor: "text-emerald-400",
                 },
                 {
+                  emoji: "⏳",
                   label: "Ce qu'on te doit encore",
                   value: formatCurrency(stats.pendingTotal),
                   sub: `${stats.pendingCount} facture${stats.pendingCount > 1 ? "s" : ""} en attente`,
-                  color: "text-gold-400",
+                  barColor: "bg-gold-400",
+                  barBg: "bg-gold-400/15",
+                  pct: Math.min(Math.round((stats.pendingTotal / total) * 100), 100),
+                  textColor: "text-gold-400",
                 },
                 {
+                  emoji: stats.overdueCount > 0 ? "🚨" : "✅",
                   label: "Ce qui est en retard",
-                  value: formatCurrency(stats.overdueTotal),
-                  sub: `${stats.overdueCount} facture${stats.overdueCount > 1 ? "s" : ""} impayée${stats.overdueCount > 1 ? "s" : ""}`,
-                  color: stats.overdueCount > 0 ? "text-red-400" : "text-emerald-400",
+                  value: stats.overdueCount > 0 ? formatCurrency(stats.overdueTotal) : "Rien",
+                  sub: stats.overdueCount > 0
+                    ? `${stats.overdueCount} facture${stats.overdueCount > 1 ? "s" : ""} impayée${stats.overdueCount > 1 ? "s" : ""}`
+                    : "Tout est à jour",
+                  barColor: stats.overdueCount > 0 ? "bg-red-400" : "bg-emerald-400",
+                  barBg: stats.overdueCount > 0 ? "bg-red-400/15" : "bg-emerald-400/15",
+                  pct: Math.min(Math.round((stats.overdueTotal / total) * 100), 100),
+                  textColor: stats.overdueCount > 0 ? "text-red-400" : "text-emerald-400",
                 },
                 {
+                  emoji: sante >= 80 ? "❤️" : sante >= 50 ? "🟡" : "🩺",
                   label: "Ta santé financière",
-                  value: `${Math.round(stats.paymentRate)}%`,
-                  sub: "de tes factures sont payées",
-                  color: stats.paymentRate >= 80 ? "text-emerald-400" : stats.paymentRate >= 50 ? "text-amber-400" : "text-red-400",
+                  value: `${sante}%`,
+                  sub: sante >= 80 ? "Excellente santé" : sante >= 50 ? "En progression" : "À surveiller",
+                  barColor: sante >= 80 ? "bg-emerald-400" : sante >= 50 ? "bg-amber-400" : "bg-red-400",
+                  barBg: sante >= 80 ? "bg-emerald-400/15" : sante >= 50 ? "bg-amber-400/15" : "bg-red-400/15",
+                  pct: sante,
+                  textColor: sante >= 80 ? "text-emerald-400" : sante >= 50 ? "text-amber-400" : "text-red-400",
                 },
-              ].map((ind) => (
-                <div key={ind.label} className="bg-atlantic-900/40 px-4 py-4">
-                  <p className="text-[10px] font-sans text-atlantic-200/40 mb-1">{ind.label}</p>
-                  <p className={`text-xl font-display font-bold ${ind.color}`}>{ind.value}</p>
-                  <p className="text-[10px] font-sans text-atlantic-200/40 mt-0.5">{ind.sub}</p>
+              ];
+              return (
+                <div className="grid grid-cols-2 gap-px bg-amber-400/10 border-t border-amber-400/10">
+                  {indicators.map((ind) => (
+                    <div key={ind.label} className="bg-atlantic-900/40 px-4 py-4 space-y-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base leading-none">{ind.emoji}</span>
+                        <p className="text-[10px] font-sans text-atlantic-200/40">{ind.label}</p>
+                      </div>
+                      <p className={`text-xl font-display font-bold ${ind.textColor}`}>{ind.value}</p>
+                      {/* Barre de progression animée */}
+                      <div className={`h-1.5 rounded-full ${ind.barBg} overflow-hidden`}>
+                        <div
+                          className={`h-full rounded-full ${ind.barColor} transition-all duration-[1.5s] ease-out`}
+                          style={{ width: `${ind.pct}%` }}
+                        />
+                      </div>
+                      <p className="text-[10px] font-sans text-atlantic-200/40">{ind.sub}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              );
+            })()}
 
             {/* Action Sam */}
             {stats.overdueCount > 0 && (

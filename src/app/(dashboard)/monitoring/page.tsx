@@ -32,7 +32,7 @@ const TYPE_CONFIG: Record<string, { icon: React.ComponentType<{ className?: stri
   sequence_gap: { icon: FileText, label: "Rupture séquence" },
 };
 
-export default function MonitoringPage() {
+function MonitoringContent() {
   const { documents } = useAppContext();
   const [anomalies, setAnomalies] = useState<LocalAnomaly[]>([]);
   const [scanning, setScanning] = useState(false);
@@ -86,17 +86,6 @@ export default function MonitoringPage() {
 
   return (
     <PageTransition>
-      <ModeGate
-        requiredMode="expert"
-        featureName="Monitoring"
-        samMessage="Le monitoring c'est la vue en temps réel sur la santé technique de ton activité. Disponible en plan Expert."
-        benefits={[
-          "Surveillance en temps réel de l'activité",
-          "Alertes techniques automatiques",
-          "Historique complet des événements",
-          "Indicateurs de performance avancés",
-        ]}
-      >
       <Topbar
         title="Monitoring"
         subtitle={`${activeCount} alerte${activeCount > 1 ? "s" : ""} active${activeCount > 1 ? "s" : ""}`}
@@ -336,7 +325,24 @@ export default function MonitoringPage() {
           ))}
         </div>
       </div>
-      </ModeGate>
     </PageTransition>
+  );
+}
+
+export default function MonitoringPage() {
+  return (
+    <ModeGate
+      requiredMode="expert"
+      featureName="Monitoring"
+      samMessage="Le monitoring c'est la vue en temps réel sur la santé technique de ton activité. Disponible en plan Expert."
+      benefits={[
+        "Surveillance en temps réel de l'activité",
+        "Alertes techniques automatiques",
+        "Historique complet des événements",
+        "Indicateurs de performance avancés",
+      ]}
+    >
+      <MonitoringContent />
+    </ModeGate>
   );
 }

@@ -7,14 +7,14 @@ import { PremiumButton } from "@/components/premium/premium-button";
 import { PremiumInput } from "@/components/premium/premium-input";
 import { PageTransition } from "@/components/premium/page-transition";
 import {
-  Package, Plus, Search, Edit2, Trash2, Tag, Check, X,
+  Package, Plus, Search, Edit2, Trash2, Tag, Check, X, Lock,
 } from "lucide-react";
 import {
   saveProduct as saveProductDB,
   deleteProduct as deleteProductDB,
 } from "@/lib/supabase/data";
 import { useAppContext } from "@/lib/context/app-context";
-import { ModeGate } from "@/components/dashboard/mode-gate";
+import { ModeGate, useModePreview } from "@/components/dashboard/mode-gate";
 import { formatCurrency } from "@/lib/utils";
 import type { Product } from "@/types/database";
 
@@ -29,14 +29,14 @@ const TVA_RATES = [
   { value: 20, label: "20% (Normal)" },
 ];
 
-export default function ProductsPage() {
+function ProductsContent() {
+  const { isPreview } = useModePreview();
   const { products, dataLoading: loading, refreshProducts } = useAppContext();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
-
 
   const filtered = useMemo(() => {
     if (!search) return products;
@@ -65,8 +65,8 @@ export default function ProductsPage() {
       await refreshProducts();
       setShowForm(false);
       setEditing(null);
-    } catch (e: any) {
-      setError(e.message || "Erreur lors de la sauvegarde");
+    } catch (e: unknown) {
+      setError((e as Error).message || "Erreur lors de la sauvegarde");
     } finally {
       setSaving(false);
     }
@@ -77,24 +77,13 @@ export default function ProductsPage() {
     try {
       await deleteProductDB(id);
       await refreshProducts();
-    } catch (e: any) {
-      setError(e.message || "Erreur lors de la suppression");
+    } catch (e: unknown) {
+      setError((e as Error).message || "Erreur lors de la suppression");
     }
   }
 
   return (
     <PageTransition>
-      <ModeGate
-        requiredMode="intermediaire"
-        featureName="Catalogue Produits"
-        samMessage="Un catalogue produits te fait gagner un temps fou — plus besoin de retaper tes prestations à chaque facture. C'est disponible dans le plan Pro."
-        benefits={[
-          "Crée tes prestations une fois, réutilise-les sur toutes tes factures",
-          "Prix et unités mémorisés automatiquement",
-          "Sam détecte les produits non facturés depuis longtemps",
-          "Analyse de rentabilité par produit",
-        ]}
-      >
       <Topbar title="Produits & Services" subtitle={loading ? "Chargement..." : `${products.length} produit${products.length > 1 ? "s" : ""}`} />
       <div className="p-6">
         {error && (
@@ -108,9 +97,16 @@ export default function ProductsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-atlantic-200/30" />
             <input type="text" placeholder="Rechercher..." value={search} onChange={(e) => setSearch(e.target.value)} className="premium-input w-full pl-10 text-sm" />
           </div>
-          <PremiumButton size="sm" icon={<Plus className="w-4 h-4" />} onClick={openNew}>
-            Nouveau produit
-          </PremiumButton>
+          {isPreview ? (
+            <button disabled className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-atlantic-700/30 border border-atlantic-500/20 text-atlantic-200/30 text-xs font-sans cursor-not-allowed">
+              <Lock className="w-3 h-3" />
+              Nouveau produit
+            </button>
+          ) : (
+            <PremiumButton size="sm" icon={<Plus className="w-4 h-4" />} onClick={openNew}>
+              Nouveau produit
+            </PremiumButton>
+          )}
         </div>
 
         {/* Form modal */}
@@ -145,9 +141,16 @@ export default function ProductsPage() {
               </div>
               <div className="mt-6 flex justify-end gap-3">
                 <PremiumButton variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>Annuler</PremiumButton>
-                <PremiumButton onClick={handleSave} loading={saving} icon={<Check className="w-4 h-4" />}>
-                  {editing.id ? "Mettre à jour" : "Créer"}
-                </PremiumButton>
+                {isPreview ? (
+                  <button disabled className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-atlantic-700/30 border border-atlantic-500/20 text-atlantic-200/30 text-sm font-sans cursor-not-allowed">
+                    <Lock className="w-3.5 h-3.5" />
+                    {editing.id ? "Mettre à jour" : "Créer"}
+                  </button>
+                ) : (
+                  <PremiumButton onClick={handleSave} loading={saving} icon={<Check className="w-4 h-4" />}>
+                    {editing.id ? "Mettre à jour" : "Créer"}
+                  </PremiumButton>
+                )}
               </div>
             </GlassCard>
           </div>
@@ -173,7 +176,7 @@ export default function ProductsPage() {
                 {search ? "Aucun résultat" : "Catalogue vide"}
               </h3>
               <p className="text-sm font-sans text-atlantic-200/40">
-                {search ? "Essayez un autre terme" : "Ajoutez vos produits et services"}
+                {search ? "Essayez un autre terme" : isPreview ? "Passez au plan Pro pour ajouter vos produits" : "Ajoutez vos produits et services"}
               </p>
             </div>
           </GlassCard>
@@ -207,20 +210,44 @@ export default function ProductsPage() {
                   </p>
                   <p className="text-[10px] font-sans text-atlantic-200/30">HT / {product.unit}</p>
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => openEdit(product)} className="p-1.5 rounded-lg hover:bg-gold-400/10 text-atlantic-200/30 hover:text-gold-400 transition-all">
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button onClick={() => handleDelete(product.id)} className="p-1.5 rounded-lg hover:bg-red-400/10 text-atlantic-200/30 hover:text-red-400 transition-all">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                {!isPreview && (
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => openEdit(product)} className="p-1.5 rounded-lg hover:bg-gold-400/10 text-atlantic-200/30 hover:text-gold-400 transition-all">
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => handleDelete(product.id)} className="p-1.5 rounded-lg hover:bg-red-400/10 text-atlantic-200/30 hover:text-red-400 transition-all">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+                {isPreview && (
+                  <div className="opacity-40">
+                    <Lock className="w-3.5 h-3.5 text-atlantic-200/40" />
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
-      </ModeGate>
     </PageTransition>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <ModeGate
+      requiredMode="intermediaire"
+      featureName="Catalogue Produits"
+      samMessage="Un catalogue produits te fait gagner un temps fou — plus besoin de retaper tes prestations à chaque facture. C'est disponible dans le plan Pro."
+      benefits={[
+        "Crée tes prestations une fois, réutilise-les sur toutes tes factures",
+        "Prix et unités mémorisés automatiquement",
+        "Sam détecte les produits non facturés depuis longtemps",
+        "Analyse de rentabilité par produit",
+      ]}
+    >
+      <ProductsContent />
+    </ModeGate>
   );
 }

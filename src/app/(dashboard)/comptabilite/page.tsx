@@ -8,10 +8,10 @@ import { PageTransition } from "@/components/premium/page-transition";
 import {
   TrendingUp, TrendingDown, Receipt, Clock, CheckCircle2,
   Download, BookOpen, AlertTriangle, Users, BarChart3,
-  FileCheck, Plus, Trash2, X, Paperclip, Eye, Sparkles, Scale,
+  FileCheck, Plus, Trash2, X, Paperclip, Eye, Sparkles, Scale, Lock,
 } from "lucide-react";
 import { useAppContext } from "@/lib/context/app-context";
-import { ModeGate } from "@/components/dashboard/mode-gate";
+import { ModeGate, useModePreview } from "@/components/dashboard/mode-gate";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { CATEGORIES, CATEGORIES_IMMOB, TVA_RATES, saveDepense, deleteDepense } from "@/lib/depenses";
 import {
@@ -56,7 +56,8 @@ const BLANK_FORM = {
   piece_ref: "",
 };
 
-export default function ComptabilitePage() {
+function ComptabiliteContent() {
+  const { isPreview } = useModePreview();
   const { documents, clients, depenses, refreshDepenses, dataLoading: loading } = useAppContext();
   const { level: guardLevel, demoType: guardDemoType, setDemo } = useDeclarationGuard();
   const [org, setOrg] = useState<Organization | null>(null);
@@ -619,17 +620,6 @@ export default function ComptabilitePage() {
 
   return (
     <PageTransition>
-      <ModeGate
-        requiredMode="intermediaire"
-        featureName="Comptabilité"
-        samMessage="Ta comptabilité c'est le pouls de ton activité. Sam surveille tes seuils TVA, tes déclarations, et te prévient avant que ça devienne un problème. Disponible en plan Pro."
-        benefits={[
-          "Suivi TVA automatique avec alertes avant échéance",
-          "Bilan mensuel simplifié en langage clair",
-          "Sam te prévient si tu approches du seuil de franchise",
-          "Export comptable prêt pour ton expert-comptable",
-        ]}
-      >
       <Topbar
         title="Comptabilité"
         subtitle={`${kpis.nbPaid} encaissement${kpis.nbPaid > 1 ? "s" : ""} • ${activeYear}`}
@@ -1050,12 +1040,19 @@ export default function ComptabilitePage() {
                 <p className="text-[10px] font-sans text-atlantic-200/40 mt-0.5">Factures fournisseurs • TVA déductible • journal AC du FEC</p>
               </div>
             </div>
-            <button onClick={() => setShowForm(!showForm)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gold-400/10 border border-gold-400/20 text-gold-400 text-sm font-sans font-medium hover:bg-gold-400/20 hover:border-gold-400/40 transition-all"
-            >
-              {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-              {showForm ? "Annuler" : "Ajouter"}
-            </button>
+            {isPreview ? (
+              <button disabled className="flex items-center gap-2 px-4 py-2 rounded-xl bg-atlantic-700/30 border border-atlantic-500/20 text-atlantic-200/30 text-sm font-sans cursor-not-allowed">
+                <Lock className="w-4 h-4" />
+                Ajouter
+              </button>
+            ) : (
+              <button onClick={() => setShowForm(!showForm)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gold-400/10 border border-gold-400/20 text-gold-400 text-sm font-sans font-medium hover:bg-gold-400/20 hover:border-gold-400/40 transition-all"
+              >
+                {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                {showForm ? "Annuler" : "Ajouter"}
+              </button>
+            )}
           </div>
 
           {showForm && (
@@ -1555,7 +1552,24 @@ export default function ComptabilitePage() {
         </GlassCard>
 
       </div>
-      </ModeGate>
     </PageTransition>
+  );
+}
+
+export default function ComptabilitePage() {
+  return (
+    <ModeGate
+      requiredMode="intermediaire"
+      featureName="Comptabilité"
+      samMessage="Ta comptabilité c'est le pouls de ton activité. Sam surveille tes seuils TVA, tes déclarations, et te prévient avant que ça devienne un problème. Disponible en plan Pro."
+      benefits={[
+        "Suivi TVA automatique avec alertes avant échéance",
+        "Bilan mensuel simplifié en langage clair",
+        "Sam te prévient si tu approches du seuil de franchise",
+        "Export comptable prêt pour ton expert-comptable",
+      ]}
+    >
+      <ComptabiliteContent />
+    </ModeGate>
   );
 }
