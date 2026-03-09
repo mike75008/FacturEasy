@@ -835,10 +835,10 @@ export default function DashboardPage() {
               );
             })}
           </div>
-        </GlassCard>
+        </GlassCard>}
 
-        {/* Quick Stats Row */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Quick Stats Row — Expert/Intermédiaire uniquement */}
+        {appMode !== "decouverte" && <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: "Devis", value: stats.quoteCount, icon: FileText, desc: `${stats.quoteConversion}% conversion` },
             { label: "Produits", value: stats.productCount, icon: Package, desc: "dans le catalogue" },
@@ -857,8 +857,9 @@ export default function DashboardPage() {
               </div>
             </GlassCard>
           ))}
-        </div>
-      </div>}
+        </div>}
+
+      </div>
 
       {/* ═══ PANNEAU IA ═══ */}
       {showAIPanel && (
