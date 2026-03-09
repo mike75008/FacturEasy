@@ -14,6 +14,7 @@ import {
   deleteProduct as deleteProductDB,
 } from "@/lib/supabase/data";
 import { useAppContext } from "@/lib/context/app-context";
+import { ModeGate } from "@/components/dashboard/mode-gate";
 import { formatCurrency } from "@/lib/utils";
 import type { Product } from "@/types/database";
 
@@ -83,6 +84,17 @@ export default function ProductsPage() {
 
   return (
     <PageTransition>
+      <ModeGate
+        requiredMode="intermediaire"
+        featureName="Catalogue Produits"
+        samMessage="Un catalogue produits te fait gagner un temps fou — plus besoin de retaper tes prestations à chaque facture. C'est disponible dans le plan Pro."
+        benefits={[
+          "Crée tes prestations une fois, réutilise-les sur toutes tes factures",
+          "Prix et unités mémorisés automatiquement",
+          "Sam détecte les produits non facturés depuis longtemps",
+          "Analyse de rentabilité par produit",
+        ]}
+      >
       <Topbar title="Produits & Services" subtitle={loading ? "Chargement..." : `${products.length} produit${products.length > 1 ? "s" : ""}`} />
       <div className="p-6">
         {error && (
@@ -208,6 +220,7 @@ export default function ProductsPage() {
           </div>
         )}
       </div>
+      </ModeGate>
     </PageTransition>
   );
 }

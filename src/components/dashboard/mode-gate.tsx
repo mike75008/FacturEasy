@@ -1,0 +1,79 @@
+"use client";
+
+import { useAppContext } from "@/lib/context/app-context";
+import type { AppMode } from "@/lib/context/app-context";
+import { Lock } from "lucide-react";
+
+interface ModeGateProps {
+  children: React.ReactNode;
+  requiredMode: AppMode;        // mode minimum pour accéder
+  featureName: string;          // nom de la fonctionnalité
+  samMessage: string;           // ce que Sam dit avec les données réelles
+  benefits: string[];           // ce que l'utilisateur gagne en passant au plan supérieur
+}
+
+const MODE_LABELS: Record<AppMode, string> = {
+  decouverte: "Découverte",
+  intermediaire: "Pro",
+  expert: "Expert",
+};
+
+const MODE_ORDER: Record<AppMode, number> = {
+  decouverte: 0,
+  intermediaire: 1,
+  expert: 2,
+};
+
+export function ModeGate({ children, requiredMode, featureName, samMessage, benefits }: ModeGateProps) {
+  const { appMode, setAppMode } = useAppContext();
+
+  const hasAccess = MODE_ORDER[appMode] >= MODE_ORDER[requiredMode];
+  if (hasAccess) return <>{children}</>;
+
+  const targetLabel = MODE_LABELS[requiredMode];
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 py-12 text-center max-w-lg mx-auto">
+
+      {/* Sam parle en premier */}
+      <div className="w-full rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] p-5 mb-8 text-left">
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="w-7 h-7 rounded-lg bg-amber-400/20 border border-amber-400/30 flex items-center justify-center font-display font-bold text-amber-300 text-sm flex-shrink-0">
+            S
+          </div>
+          <p className="text-xs font-sans font-bold text-amber-300">Sam</p>
+        </div>
+        <p className="text-sm font-sans text-white leading-relaxed">{samMessage}</p>
+      </div>
+
+      {/* Ce que tu gagnes */}
+      <div className="w-full rounded-xl border border-gold-400/10 bg-atlantic-800/20 p-5 mb-6 text-left">
+        <div className="flex items-center gap-2 mb-3">
+          <Lock className="w-4 h-4 text-gold-400/60" />
+          <p className="text-xs font-sans font-semibold text-white">
+            {featureName} — disponible en plan <span className="text-gold-400">{targetLabel}</span>
+          </p>
+        </div>
+        <ul className="space-y-2">
+          {benefits.map((b, i) => (
+            <li key={i} className="flex items-start gap-2 text-xs font-sans text-atlantic-200/60">
+              <span className="text-gold-400 mt-0.5 flex-shrink-0">→</span>
+              {b}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Simuler le plan supérieur pour tester */}
+      <button
+        onClick={() => setAppMode(requiredMode)}
+        className="w-full py-3 rounded-xl bg-gold-400/10 border border-gold-400/20 text-gold-400 text-sm font-sans font-semibold hover:bg-gold-400/20 transition-all"
+      >
+        Voir en plan {targetLabel} →
+      </button>
+      <p className="text-[10px] font-sans text-atlantic-200/30 mt-3">
+        Mode test — en production ce bouton sera remplacé par la page d&apos;abonnement
+      </p>
+    </div>
+  );
+}

@@ -15,6 +15,7 @@ import {
 } from "@/lib/local-storage";
 import type { LocalAnomaly } from "@/lib/local-storage";
 import { useAppContext } from "@/lib/context/app-context";
+import { ModeGate } from "@/components/dashboard/mode-gate";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 
 const SEVERITY_CONFIG = {
@@ -85,6 +86,17 @@ export default function MonitoringPage() {
 
   return (
     <PageTransition>
+      <ModeGate
+        requiredMode="expert"
+        featureName="Monitoring"
+        samMessage="Le monitoring c'est la vue en temps réel sur la santé technique de ton activité. Disponible en plan Expert."
+        benefits={[
+          "Surveillance en temps réel de l'activité",
+          "Alertes techniques automatiques",
+          "Historique complet des événements",
+          "Indicateurs de performance avancés",
+        ]}
+      >
       <Topbar
         title="Monitoring"
         subtitle={`${activeCount} alerte${activeCount > 1 ? "s" : ""} active${activeCount > 1 ? "s" : ""}`}
@@ -324,6 +336,7 @@ export default function MonitoringPage() {
           ))}
         </div>
       </div>
+      </ModeGate>
     </PageTransition>
   );
 }

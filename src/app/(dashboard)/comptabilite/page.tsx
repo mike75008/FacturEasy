@@ -11,6 +11,7 @@ import {
   FileCheck, Plus, Trash2, X, Paperclip, Eye, Sparkles, Scale,
 } from "lucide-react";
 import { useAppContext } from "@/lib/context/app-context";
+import { ModeGate } from "@/components/dashboard/mode-gate";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { CATEGORIES, CATEGORIES_IMMOB, TVA_RATES, saveDepense, deleteDepense } from "@/lib/depenses";
 import {
@@ -618,6 +619,17 @@ export default function ComptabilitePage() {
 
   return (
     <PageTransition>
+      <ModeGate
+        requiredMode="intermediaire"
+        featureName="Comptabilité"
+        samMessage="Ta comptabilité c'est le pouls de ton activité. Sam surveille tes seuils TVA, tes déclarations, et te prévient avant que ça devienne un problème. Disponible en plan Pro."
+        benefits={[
+          "Suivi TVA automatique avec alertes avant échéance",
+          "Bilan mensuel simplifié en langage clair",
+          "Sam te prévient si tu approches du seuil de franchise",
+          "Export comptable prêt pour ton expert-comptable",
+        ]}
+      >
       <Topbar
         title="Comptabilité"
         subtitle={`${kpis.nbPaid} encaissement${kpis.nbPaid > 1 ? "s" : ""} • ${activeYear}`}
@@ -1543,6 +1555,7 @@ export default function ComptabilitePage() {
         </GlassCard>
 
       </div>
+      </ModeGate>
     </PageTransition>
   );
 }

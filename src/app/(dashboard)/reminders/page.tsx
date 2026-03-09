@@ -19,6 +19,7 @@ import {
   markReminderSent,
 } from "@/lib/supabase/data";
 import { useAppContext } from "@/lib/context/app-context";
+import { ModeGate } from "@/components/dashboard/mode-gate";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { notifyRelanceSent, notifyContentieux } from "@/lib/notifications";
 import type { Reminder, Document as Doc, Client } from "@/types/database";
@@ -394,8 +395,28 @@ export default function RemindersPage() {
   const overdueTotalPages = Math.max(1, Math.ceil(filteredOverdue.length / PAGE_SIZE));
   const overdueVisible = filteredOverdue.slice((overdueCurrentPage - 1) * PAGE_SIZE, overdueCurrentPage * PAGE_SIZE);
 
+  const { overdueTotal } = (() => {
+    const now = new Date();
+    const overdue = documents.filter(d => d.type === "facture" && d.status !== "paye" && d.status !== "annule" && d.due_date && new Date(d.due_date) < now);
+    return { overdueTotal: overdue.reduce((s, d) => s + d.total_ttc, 0) };
+  })();
+
   return (
     <PageTransition>
+      <ModeGate
+        requiredMode="intermediaire"
+        featureName="Relances"
+        samMessage={overdueTotal > 0
+          ? `Tu as ${overdueInvoices.length} facture${overdueInvoices.length > 1 ? "s" : ""} en retard pour un total de ${overdueTotal.toFixed(2).replace(".", ",")}€. Les relances automatiques règlent ça en général en 48h — c'est dans le plan Pro. Voici ce que ça ferait sur tes factures à toi.`
+          : "Les relances automatiques te permettent de récupérer tes paiements sans y penser. Sam envoie le bon message au bon moment — c'est dans le plan Pro."
+        }
+        benefits={[
+          "Relances automatiques par email au bon moment",
+          "Sam choisit le ton selon le client et le retard",
+          "Historique complet des relances envoyées",
+          "Relances manuelles par email, SMS ou appel",
+        ]}
+      >
       <Topbar title="Relances" subtitle={`${overdueInvoices.length} facture${overdueInvoices.length > 1 ? "s" : ""} en retard${pendingDocs.length > 0 ? ` · ${pendingDocs.length} document${pendingDocs.length > 1 ? "s" : ""} en attente` : ""}`} />
       <div className="p-6 space-y-6">
         {/* Confirmation auto-relance programmée */}
@@ -1003,6 +1024,7 @@ export default function RemindersPage() {
           </div>
         )}
       </div>
+      </ModeGate>
     </PageTransition>
   );
 }
