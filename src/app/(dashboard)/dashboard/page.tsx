@@ -475,7 +475,8 @@ export default function DashboardPage() {
         {/* Ligne 1 : Performances + Donut + Documents récents — masqués en Découverte sauf Documents */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Rectangle 1 — Lignes de performance — Expert/Intermédiaire uniquement */}
-          {appMode !== "decouverte" && <div className="h-full">
+          {appMode !== "decouverte" && (
+          <div className="h-full">
             <GlassCard hover={false} className="h-full">
               <div className="flex items-center gap-2 mb-5">
                 <TrendingUp className="w-5 h-5 text-gold-400" />
@@ -504,10 +505,12 @@ export default function DashboardPage() {
                 ))}
               </div>
             </GlassCard>
-          </div>}
+          </div>
+          )}
 
           {/* Rectangle 2 — Donut — Expert/Intermédiaire uniquement */}
-          {appMode !== "decouverte" && <div className="h-full">
+          {appMode !== "decouverte" && (
+          <div className="h-full">
             <GlassCard hover={false} className="h-full">
               {(() => {
                 const dData = [
@@ -564,7 +567,8 @@ export default function DashboardPage() {
                 );
               })()}
             </GlassCard>
-          </div>}
+          </div>
+          )}
 
           {/* Documents récents */}
           <div className="flex flex-col gap-6">
@@ -614,7 +618,8 @@ export default function DashboardPage() {
         </div>
 
         {/* Ligne 2 : CA Chart + ROI — Expert/Intermédiaire uniquement */}
-        {appMode !== "decouverte" && <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {appMode !== "decouverte" && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* CA Chart — 2/3 */}
           <div className="lg:col-span-2">
             <GlassCard hover={false}>
@@ -769,10 +774,12 @@ export default function DashboardPage() {
               </div>
             </GlassCard>
           </div>
-        </div>}
+        </div>
+        )}
 
         {/* Gamification Section — Expert/Intermédiaire uniquement */}
-        {appMode !== "decouverte" && <GlassCard hover={false}>
+        {appMode !== "decouverte" && (
+        <GlassCard hover={false}>
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <Award className="w-5 h-5 text-gold-400" />
@@ -835,10 +842,12 @@ export default function DashboardPage() {
               );
             })}
           </div>
-        </GlassCard>}
+        </GlassCard>
+        )}
 
         {/* Quick Stats Row — Expert/Intermédiaire uniquement */}
-        {appMode !== "decouverte" && <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {appMode !== "decouverte" && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             { label: "Devis", value: stats.quoteCount, icon: FileText, desc: `${stats.quoteConversion}% conversion` },
             { label: "Produits", value: stats.productCount, icon: Package, desc: "dans le catalogue" },
@@ -857,7 +866,8 @@ export default function DashboardPage() {
               </div>
             </GlassCard>
           ))}
-        </div>}
+        </div>
+        )}
 
       </div>
 
