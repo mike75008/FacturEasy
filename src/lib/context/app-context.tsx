@@ -20,6 +20,8 @@ import { getDepenses as getDepensesLS } from "@/lib/depenses";
 import type { AppNotification } from "@/lib/supabase/data";
 import type { Document as Doc, Client, Product, Reminder, Depense } from "@/types/database";
 
+export type AppMode = "decouverte" | "intermediaire" | "expert";
+
 interface AppContextValue {
   userName: string;
   userEmail: string;
@@ -30,6 +32,8 @@ interface AppContextValue {
   reminders: Reminder[];
   depenses: Depense[];
   dataLoading: boolean;
+  appMode: AppMode;
+  setAppMode: (mode: AppMode) => void;
   refreshDocuments: () => Promise<void>;
   refreshClients: () => Promise<void>;
   refreshProducts: () => Promise<void>;
@@ -47,6 +51,8 @@ const AppContext = createContext<AppContextValue>({
   reminders: [],
   depenses: [],
   dataLoading: true,
+  appMode: "expert",
+  setAppMode: () => {},
   refreshDocuments: async () => {},
   refreshClients: async () => {},
   refreshProducts: async () => {},
@@ -68,6 +74,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [depenses, setDepenses] = useState<Depense[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+  const [appMode, setAppModeState] = useState<AppMode>(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("app_mode");
+      if (stored === "decouverte" || stored === "intermediaire" || stored === "expert") return stored;
+    }
+    return "expert";
+  });
+
+  function setAppMode(mode: AppMode) {
+    setAppModeState(mode);
+    localStorage.setItem("app_mode", mode);
+  }
 
   const refreshDocuments = useCallback(async () => {
     try {
@@ -173,7 +191,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider value={{
       userName, userEmail, notifications,
       documents, clients, products, reminders, depenses,
-      dataLoading,
+      dataLoading, appMode, setAppMode,
       refreshDocuments, refreshClients, refreshProducts,
       refreshReminders, refreshDepenses,
     }}>

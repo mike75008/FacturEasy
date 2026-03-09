@@ -28,7 +28,7 @@ const BADGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
 };
 
 export default function DashboardPage() {
-  const { documents, clients: clientsList, products: productsList, reminders, dataLoading: loading } = useAppContext();
+  const { documents, clients: clientsList, products: productsList, reminders, dataLoading: loading, appMode, setAppMode, userName } = useAppContext();
   const [gamification] = useState(() => getUserGamification());
   const [chartAnimated, setChartAnimated] = useState(false);
   const [roiIndex, setRoiIndex] = useState(0);
@@ -291,20 +291,144 @@ export default function DashboardPage() {
           </div>
         }
         rightExtra={
-          <button
-            onClick={() => { setShowAIPanel(true); if (!aiAnalysis) generateAIAnalysis(); }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-sans font-medium text-gold-400 bg-gold-400/10 border border-gold-400/20 hover:bg-gold-400/20 hover:border-gold-400/40 transition-all"
-            title="Analyse IA du tableau de bord"
-          >
-            <Brain className="w-4 h-4" />
-            <span className="hidden sm:inline">Analyse IA</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Sélecteur de mode — test dev */}
+            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-atlantic-800/50 border border-white/5">
+              {(["decouverte", "intermediaire", "expert"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setAppMode(m)}
+                  className={`px-2 py-1 rounded-md text-[9px] font-sans font-semibold transition-all ${
+                    appMode === m
+                      ? "bg-gold-400/15 text-gold-400 border border-gold-400/20"
+                      : "text-atlantic-200/30 hover:text-white"
+                  }`}
+                >
+                  {m === "decouverte" ? "Découverte" : m === "intermediaire" ? "Pro" : "Expert"}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => { setShowAIPanel(true); if (!aiAnalysis) generateAIAnalysis(); }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-sans font-medium text-gold-400 bg-gold-400/10 border border-gold-400/20 hover:bg-gold-400/20 hover:border-gold-400/40 transition-all"
+              title="Analyse IA du tableau de bord"
+            >
+              <Brain className="w-4 h-4" />
+              <span className="hidden sm:inline">Analyse IA</span>
+            </button>
+          </div>
         }
       />
 
       <div className="p-6 space-y-6">
-        {/* Overdue alert */}
-        {stats.overdueCount > 0 && (
+
+        {/* ══ SAM — MODE DÉCOUVERTE ══ */}
+        {appMode === "decouverte" && (
+          <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] overflow-hidden">
+
+            {/* En-tête Sam */}
+            <div className="flex items-center gap-3 px-5 pt-5 pb-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center font-display font-bold text-amber-300 text-base flex-shrink-0">
+                S
+              </div>
+              <div>
+                <p className="text-sm font-sans font-bold text-amber-300">Sam</p>
+                <p className="text-[10px] font-sans text-atlantic-200/40">Voici ta situation en ce moment</p>
+              </div>
+            </div>
+
+            {/* Message Sam — contextuel et avec tes vraies données */}
+            <div className="px-5 pb-4">
+              {stats.overdueCount > 0 ? (
+                <p className="text-sm font-sans text-white leading-relaxed">
+                  {userName.split(" ")[0]}, tu as{" "}
+                  <span className="text-amber-300 font-semibold">{formatCurrency(stats.overdueTotal)}</span>
+                  {" "}qui t&apos;attendent sur{" "}
+                  <span className="text-amber-300 font-semibold">{stats.overdueCount} facture{stats.overdueCount > 1 ? "s" : ""}</span>
+                  {" "}en retard. C&apos;est la priorité du jour. J&apos;ai tout préparé.
+                </p>
+              ) : stats.pendingTotal > 0 ? (
+                <p className="text-sm font-sans text-white leading-relaxed">
+                  Tout est à jour — aucun retard.{" "}
+                  <span className="text-amber-300 font-semibold">{formatCurrency(stats.pendingTotal)}</span>
+                  {" "}sont en route vers toi. On surveille ça ensemble.
+                </p>
+              ) : (
+                <p className="text-sm font-sans text-white leading-relaxed">
+                  Pas encore de facture envoyée ce mois-ci. C&apos;est le bon moment pour commencer — je t&apos;accompagne étape par étape.
+                </p>
+              )}
+            </div>
+
+            {/* 4 indicateurs traduits */}
+            <div className="grid grid-cols-2 gap-px bg-amber-400/10 border-t border-amber-400/10">
+              {[
+                {
+                  label: "Ce que tu as gagné",
+                  value: formatCurrency(stats.totalCA),
+                  sub: "encaissé ce mois",
+                  color: "text-emerald-400",
+                },
+                {
+                  label: "Ce qu'on te doit encore",
+                  value: formatCurrency(stats.pendingTotal),
+                  sub: `${stats.pendingCount} facture${stats.pendingCount > 1 ? "s" : ""} en attente`,
+                  color: "text-gold-400",
+                },
+                {
+                  label: "Ce qui est en retard",
+                  value: formatCurrency(stats.overdueTotal),
+                  sub: `${stats.overdueCount} facture${stats.overdueCount > 1 ? "s" : ""} impayée${stats.overdueCount > 1 ? "s" : ""}`,
+                  color: stats.overdueCount > 0 ? "text-red-400" : "text-emerald-400",
+                },
+                {
+                  label: "Ta santé financière",
+                  value: `${Math.round(stats.paymentRate)}%`,
+                  sub: "de tes factures sont payées",
+                  color: stats.paymentRate >= 80 ? "text-emerald-400" : stats.paymentRate >= 50 ? "text-amber-400" : "text-red-400",
+                },
+              ].map((ind) => (
+                <div key={ind.label} className="bg-atlantic-900/40 px-4 py-4">
+                  <p className="text-[10px] font-sans text-atlantic-200/40 mb-1">{ind.label}</p>
+                  <p className={`text-xl font-display font-bold ${ind.color}`}>{ind.value}</p>
+                  <p className="text-[10px] font-sans text-atlantic-200/40 mt-0.5">{ind.sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Action Sam */}
+            {stats.overdueCount > 0 && (
+              <div className="px-5 py-4 border-t border-amber-400/10 flex items-center justify-between gap-4">
+                <p className="text-xs font-sans text-atlantic-200/50">
+                  J&apos;ai préparé {stats.overdueCount} relance{stats.overdueCount > 1 ? "s" : ""}. Tu valides et c&apos;est envoyé.
+                </p>
+                <a
+                  href="/reminders"
+                  className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-400/15 text-amber-300 hover:bg-amber-400/25 text-xs font-sans font-semibold border border-amber-400/20 transition-all"
+                >
+                  Voir les relances
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Sam intermédiaire — bandeau compact */}
+        {appMode === "intermediaire" && stats.overdueCount > 0 && (
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-400/[0.06] border border-amber-400/15">
+            <div className="w-6 h-6 rounded-lg bg-amber-400/20 border border-amber-400/30 flex items-center justify-center font-display font-bold text-amber-300 text-xs flex-shrink-0">S</div>
+            <p className="text-xs font-sans text-white flex-1">
+              <span className="text-amber-300 font-semibold">Sam · </span>
+              {stats.overdueCount} relance{stats.overdueCount > 1 ? "s" : ""} prioritaire{stats.overdueCount > 1 ? "s" : ""} — {formatCurrency(stats.overdueTotal)} en jeu. Je les ai préparées.
+            </p>
+            <a href="/reminders" className="flex-shrink-0 text-[10px] font-sans font-semibold text-amber-300 hover:text-amber-200 transition-colors whitespace-nowrap">
+              Voir →
+            </a>
+          </div>
+        )}
+
+        {/* Overdue alert — Expert uniquement */}
+        {appMode === "expert" && stats.overdueCount > 0 && (
           <div className="flex items-center gap-3 p-4 rounded-xl bg-red-400/[0.06] border border-red-400/15">
             <AlertTriangle className="w-5 h-5 text-red-400" />
             <div className="flex-1">
@@ -314,7 +438,8 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* KPI Cards */}
+        {/* KPI Cards — masquées en Découverte (Sam les remplace) */}
+        {appMode !== "decouverte" && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {kpis.map((kpi) => (
             <GlassCard key={kpi.label} className="group relative overflow-hidden">
@@ -345,11 +470,12 @@ export default function DashboardPage() {
             </GlassCard>
           ))}
         </div>
+        )}
 
-        {/* Ligne 1 : VIDE 2/3 + Documents récents 1/3 */}
+        {/* Ligne 1 : Performances + Donut + Documents récents — masqués en Découverte sauf Documents */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Rectangle 1 — Lignes de performance */}
-          <div className="h-full">
+          {/* Rectangle 1 — Lignes de performance — Expert/Intermédiaire uniquement */}
+          {appMode !== "decouverte" && <div className="h-full">
             <GlassCard hover={false} className="h-full">
               <div className="flex items-center gap-2 mb-5">
                 <TrendingUp className="w-5 h-5 text-gold-400" />
@@ -378,10 +504,10 @@ export default function DashboardPage() {
                 ))}
               </div>
             </GlassCard>
-          </div>
+          </div>}
 
-          {/* Rectangle 2 — Donut */}
-          <div className="h-full">
+          {/* Rectangle 2 — Donut — Expert/Intermédiaire uniquement */}
+          {appMode !== "decouverte" && <div className="h-full">
             <GlassCard hover={false} className="h-full">
               {(() => {
                 const dData = [
@@ -438,9 +564,9 @@ export default function DashboardPage() {
                 );
               })()}
             </GlassCard>
-          </div>
+          </div>}
 
-          {/* Documents récents + rectangle vide */}
+          {/* Documents récents */}
           <div className="flex flex-col gap-6">
             <GlassCard hover={false}>
               <div className="flex items-center gap-2 mb-5">
@@ -487,8 +613,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Ligne 2 : CA Chart 2/3 + ROI 1/3 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Ligne 2 : CA Chart + ROI — Expert/Intermédiaire uniquement */}
+        {appMode !== "decouverte" && <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* CA Chart — 2/3 */}
           <div className="lg:col-span-2">
             <GlassCard hover={false}>
@@ -643,10 +769,10 @@ export default function DashboardPage() {
               </div>
             </GlassCard>
           </div>
-        </div>
+        </div>}
 
-        {/* Gamification Section */}
-        <GlassCard hover={false}>
+        {/* Gamification Section — Expert/Intermédiaire uniquement */}
+        {appMode !== "decouverte" && <GlassCard hover={false}>
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-2">
               <Award className="w-5 h-5 text-gold-400" />
@@ -732,7 +858,8 @@ export default function DashboardPage() {
             </GlassCard>
           ))}
         </div>
-      </div>
+      </div>}
+
       {/* ═══ PANNEAU IA ═══ */}
       {showAIPanel && (
         <div className="fixed inset-0 z-50 flex justify-end">
