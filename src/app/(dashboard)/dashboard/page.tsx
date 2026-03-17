@@ -35,6 +35,9 @@ export default function DashboardPage() {
   const [showAIPanel, setShowAIPanel] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<Record<string, unknown> | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [showSamIntro, setShowSamIntro] = useState(false);
+  const [lastLogin, setLastLogin] = useState<Date | null>(null);
+  const [selectedMetric, setSelectedMetric] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading) {
@@ -47,6 +50,15 @@ export default function DashboardPage() {
     const interval = setInterval(() => setRoiIndex((i) => (i + 1) % 4), 4000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem("last_login");
+    const introduced = localStorage.getItem("sam_introduced");
+    if (stored) setLastLogin(new Date(stored));
+    if (!introduced) setShowSamIntro(true);
+    localStorage.setItem("last_login", new Date().toISOString());
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -102,6 +114,15 @@ export default function DashboardPage() {
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 5);
   }, [documents]);
+
+  const protectedBySam = useMemo(() => {
+    const remindedDocIds = new Set(reminders.filter((r) => r.sent_at).map((r) => r.document_id));
+    const docs = documents.filter((d) => d.type === "facture" && d.status === "paye" && remindedDocIds.has(d.id));
+    return {
+      total: Math.round(docs.reduce((s, d) => s + d.total_ttc, 0) * 100) / 100,
+      docs,
+    };
+  }, [documents, reminders]);
 
   function roiColor(score: number): string {
     if (score >= 80) return "#34d399";
@@ -324,70 +345,121 @@ export default function DashboardPage() {
 
         {/* ══ SAM — MODE DÉCOUVERTE ══ */}
         {appMode === "decouverte" && (
-          <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] overflow-hidden">
-
-            {/* En-tête Sam */}
-            <div className="flex items-center gap-3 px-5 pt-5 pb-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center font-display font-bold text-amber-300 text-base flex-shrink-0">
-                S
+          <>
+            {/* Modal intro Sam — première connexion */}
+            {showSamIntro && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-atlantic-950/80 backdrop-blur-md p-6">
+                <div className="w-full max-w-md rounded-2xl border border-amber-400/20 bg-atlantic-900 p-6 space-y-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center font-display font-bold text-amber-300 text-xl flex-shrink-0">
+                      S
+                    </div>
+                    <div>
+                      <p className="text-base font-display font-bold text-amber-300">Je suis Sam</p>
+                      <p className="text-xs font-sans text-atlantic-200/40">Ton assistante financière personnelle</p>
+                    </div>
+                  </div>
+                  <p className="text-sm font-sans text-white leading-relaxed">
+                    Bonjour {userName.split(" ")[0]} 👋 Je suis là pour surveiller tes finances pendant que tu te concentres sur ton activité. Je ne dors jamais, je ne rate rien.
+                  </p>
+                  <ul className="space-y-2.5">
+                    {[
+                      "Je surveille tes factures en temps réel",
+                      "Je te préviens avant que ça devienne un problème",
+                      "Je calcule ce que tu as gagné et ce que j'ai protégé pour toi",
+                      "Je parle argent, jamais jargon",
+                    ].map((item) => (
+                      <li key={item} className="flex items-start gap-2 text-xs font-sans text-atlantic-200/60">
+                        <span className="text-amber-300 mt-0.5 flex-shrink-0">→</span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    onClick={() => { setShowSamIntro(false); localStorage.setItem("sam_introduced", "1"); }}
+                    className="w-full py-3 rounded-xl bg-amber-400/15 border border-amber-400/20 text-amber-300 text-sm font-sans font-semibold hover:bg-amber-400/25 transition-all"
+                  >
+                    Compris, allons-y →
+                  </button>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-sans font-bold text-amber-300">Sam</p>
-                <p className="text-[10px] font-sans text-atlantic-200/40">Voici ta situation en ce moment</p>
-              </div>
-            </div>
+            )}
 
-            {/* Message Sam — contextuel et avec tes vraies données */}
-            <div className="px-5 pb-4">
-              {stats.overdueCount > 0 ? (
-                <p className="text-sm font-sans text-white leading-relaxed">
-                  {userName.split(" ")[0]}, tu as{" "}
-                  <span className="text-amber-300 font-semibold">{formatCurrency(stats.overdueTotal)}</span>
-                  {" "}qui t&apos;attendent sur{" "}
-                  <span className="text-amber-300 font-semibold">{stats.overdueCount} facture{stats.overdueCount > 1 ? "s" : ""}</span>
-                  {" "}en retard. C&apos;est la priorité du jour. J&apos;ai tout préparé.
-                </p>
-              ) : stats.pendingTotal > 0 ? (
-                <p className="text-sm font-sans text-white leading-relaxed">
-                  Tout est à jour — aucun retard.{" "}
-                  <span className="text-amber-300 font-semibold">{formatCurrency(stats.pendingTotal)}</span>
-                  {" "}sont en route vers toi. On surveille ça ensemble.
-                </p>
-              ) : (
-                <p className="text-sm font-sans text-white leading-relaxed">
-                  Pas encore de facture envoyée ce mois-ci. C&apos;est le bon moment pour commencer — je t&apos;accompagne étape par étape.
-                </p>
-              )}
-            </div>
-
-            {/* 4 indicateurs visuels animés */}
+            {/* Bloc principal Sam */}
             {(() => {
+              const firstName = userName.split(" ")[0];
+              const daysSinceLogin = lastLogin
+                ? Math.floor((new Date().getTime() - lastLogin.getTime()) / 86400000)
+                : null;
+              const sinceLabel = daysSinceLogin === null ? null
+                : daysSinceLogin === 0 ? "aujourd'hui"
+                : daysSinceLogin === 1 ? "hier"
+                : `il y a ${daysSinceLogin} jours`;
+
+              let samMsg: React.ReactNode;
+              if (stats.overdueCount > 0) {
+                samMsg = (
+                  <>
+                    {sinceLabel ? `${firstName}, depuis ${sinceLabel} ` : `${firstName}, `}
+                    <span className="text-amber-300 font-semibold">{stats.overdueCount} facture{stats.overdueCount > 1 ? "s" : ""}</span>
+                    {" "}sont en retard —{" "}
+                    <span className="text-amber-300 font-semibold">{formatCurrency(stats.overdueTotal)}</span>
+                    {" "}en jeu. C&apos;est la priorité. J&apos;ai tout préparé.
+                  </>
+                );
+              } else if (stats.pendingTotal > 0) {
+                samMsg = (
+                  <>
+                    Tout est à jour — aucun retard.{" "}
+                    <span className="text-amber-300 font-semibold">{formatCurrency(stats.pendingTotal)}</span>
+                    {" "}sont en route vers toi. On surveille ça ensemble.
+                  </>
+                );
+              } else {
+                samMsg = "Pas encore de facture envoyée ce mois-ci. C'est le bon moment pour commencer — je t'accompagne étape par étape.";
+              }
+
               const total = (stats.totalCA + stats.pendingTotal + stats.overdueTotal) || 1;
               const sante = Math.round(stats.paymentRate);
+
+              const now = new Date();
+              const overdueList = documents.filter(
+                (d) => d.type === "facture" && d.status !== "paye" && d.status !== "annule" && !!d.due_date && new Date(d.due_date) < now
+              );
+              const pendingList = documents.filter(
+                (d) => d.type === "facture" && (d.status === "envoye" || d.status === "valide") && !(!!d.due_date && new Date(d.due_date) < now)
+              );
+              const paidList = documents.filter((d) => d.type === "facture" && d.status === "paye");
+
               const indicators = [
                 {
+                  key: "gained",
                   emoji: "💰",
                   label: "Ce que tu as gagné",
                   value: formatCurrency(stats.totalCA),
-                  sub: "encaissé ce mois",
+                  sub: `${paidList.length} facture${paidList.length > 1 ? "s" : ""} payée${paidList.length > 1 ? "s" : ""}`,
                   barColor: "bg-emerald-400",
                   barBg: "bg-emerald-400/15",
                   pct: Math.min(Math.round((stats.totalCA / total) * 100), 100),
                   textColor: "text-emerald-400",
+                  docs: paidList,
                 },
                 {
+                  key: "pending",
                   emoji: "⏳",
-                  label: "Ce qu'on te doit encore",
+                  label: "Ce qu'on te doit",
                   value: formatCurrency(stats.pendingTotal),
                   sub: `${stats.pendingCount} facture${stats.pendingCount > 1 ? "s" : ""} en attente`,
                   barColor: "bg-gold-400",
                   barBg: "bg-gold-400/15",
                   pct: Math.min(Math.round((stats.pendingTotal / total) * 100), 100),
                   textColor: "text-gold-400",
+                  docs: pendingList,
                 },
                 {
+                  key: "overdue",
                   emoji: stats.overdueCount > 0 ? "🚨" : "✅",
-                  label: "Ce qui est en retard",
+                  label: "En retard",
                   value: stats.overdueCount > 0 ? formatCurrency(stats.overdueTotal) : "Rien",
                   sub: stats.overdueCount > 0
                     ? `${stats.overdueCount} facture${stats.overdueCount > 1 ? "s" : ""} impayée${stats.overdueCount > 1 ? "s" : ""}`
@@ -396,56 +468,157 @@ export default function DashboardPage() {
                   barBg: stats.overdueCount > 0 ? "bg-red-400/15" : "bg-emerald-400/15",
                   pct: Math.min(Math.round((stats.overdueTotal / total) * 100), 100),
                   textColor: stats.overdueCount > 0 ? "text-red-400" : "text-emerald-400",
+                  docs: overdueList,
                 },
                 {
+                  key: "sante",
                   emoji: sante >= 80 ? "❤️" : sante >= 50 ? "🟡" : "🩺",
-                  label: "Ta santé financière",
+                  label: "Santé financière",
                   value: `${sante}%`,
-                  sub: sante >= 80 ? "Excellente santé" : sante >= 50 ? "En progression" : "À surveiller",
+                  sub: sante >= 80 ? "Excellente" : sante >= 50 ? "En progression" : "À surveiller",
                   barColor: sante >= 80 ? "bg-emerald-400" : sante >= 50 ? "bg-amber-400" : "bg-red-400",
                   barBg: sante >= 80 ? "bg-emerald-400/15" : sante >= 50 ? "bg-amber-400/15" : "bg-red-400/15",
                   pct: sante,
                   textColor: sante >= 80 ? "text-emerald-400" : sante >= 50 ? "text-amber-400" : "text-red-400",
+                  docs: [] as typeof documents,
                 },
               ];
+
+              const activeDetail = indicators.find((i) => i.key === selectedMetric);
+
               return (
-                <div className="grid grid-cols-2 gap-px bg-amber-400/10 border-t border-amber-400/10">
-                  {indicators.map((ind) => (
-                    <div key={ind.label} className="bg-atlantic-900/40 px-4 py-4 space-y-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-base leading-none">{ind.emoji}</span>
-                        <p className="text-[10px] font-sans text-atlantic-200/40">{ind.label}</p>
-                      </div>
-                      <p className={`text-xl font-display font-bold ${ind.textColor}`}>{ind.value}</p>
-                      {/* Barre de progression animée */}
-                      <div className={`h-1.5 rounded-full ${ind.barBg} overflow-hidden`}>
-                        <div
-                          className={`h-full rounded-full ${ind.barColor} transition-all duration-[1.5s] ease-out`}
-                          style={{ width: `${ind.pct}%` }}
-                        />
-                      </div>
-                      <p className="text-[10px] font-sans text-atlantic-200/40">{ind.sub}</p>
+                <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] overflow-hidden">
+
+                  {/* En-tête Sam */}
+                  <div className="flex items-center gap-3 px-5 pt-5 pb-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center font-display font-bold text-amber-300 text-base flex-shrink-0">
+                      S
                     </div>
-                  ))}
+                    <div>
+                      <p className="text-sm font-sans font-bold text-amber-300">Sam</p>
+                      <p className="text-[10px] font-sans text-atlantic-200/40">
+                        {sinceLabel ? `Connectée ${sinceLabel}` : "Première connexion"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Message Sam */}
+                  <div className="px-5 pb-4">
+                    <p className="text-sm font-sans text-white leading-relaxed">{samMsg}</p>
+                  </div>
+
+                  {/* 4 métriques cliquables */}
+                  <div className="grid grid-cols-2 gap-px bg-amber-400/10 border-t border-amber-400/10">
+                    {indicators.map((ind) => (
+                      <button
+                        key={ind.key}
+                        onClick={() => setSelectedMetric(selectedMetric === ind.key ? null : ind.key)}
+                        className={`bg-atlantic-900/40 px-4 py-4 space-y-2 text-left transition-colors ${selectedMetric === ind.key ? "bg-amber-400/[0.08]" : "hover:bg-amber-400/[0.04]"}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-base leading-none">{ind.emoji}</span>
+                            <p className="text-[10px] font-sans text-atlantic-200/40">{ind.label}</p>
+                          </div>
+                          {(ind.docs.length > 0 || ind.key === "sante") && (
+                            <span className="text-[9px] font-sans text-atlantic-200/20">
+                              {selectedMetric === ind.key ? "▲" : "▼"}
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-xl font-display font-bold ${ind.textColor}`}>{ind.value}</p>
+                        <div className={`h-1.5 rounded-full ${ind.barBg} overflow-hidden`}>
+                          <div
+                            className={`h-full rounded-full ${ind.barColor} transition-all duration-[1.5s] ease-out`}
+                            style={{ width: `${ind.pct}%` }}
+                          />
+                        </div>
+                        <p className="text-[10px] font-sans text-atlantic-200/40">{ind.sub}</p>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 5ème métrique — Protégé par Sam (pleine largeur) */}
+                  <button
+                    onClick={() => setSelectedMetric(selectedMetric === "protected" ? null : "protected")}
+                    className={`w-full flex items-center justify-between px-4 py-3 border-t border-amber-400/10 transition-colors ${selectedMetric === "protected" ? "bg-amber-400/[0.08]" : "hover:bg-amber-400/[0.04]"}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🛡️</span>
+                      <div className="text-left">
+                        <p className="text-[10px] font-sans text-atlantic-200/40">Protégé par Sam</p>
+                        <p className="text-sm font-display font-bold text-violet-400">{formatCurrency(protectedBySam.total)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[10px] font-sans text-atlantic-200/30">
+                        {protectedBySam.docs.length} facture{protectedBySam.docs.length > 1 ? "s" : ""} récupérée{protectedBySam.docs.length > 1 ? "s" : ""} grâce aux relances
+                      </p>
+                      <span className="text-[9px] font-sans text-atlantic-200/20">
+                        {selectedMetric === "protected" ? "▲" : "▼"}
+                      </span>
+                    </div>
+                  </button>
+
+                  {/* Détail de la métrique sélectionnée */}
+                  {selectedMetric && (
+                    <div className="border-t border-amber-400/10 bg-atlantic-950/30 px-5 py-4 space-y-2">
+                      {selectedMetric === "sante" ? (
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-sans text-atlantic-200/40 mb-3">Décomposition du score</p>
+                          {[
+                            { label: "Taux de paiement", val: `${Math.round(stats.paymentRate)}%` },
+                            { label: "Recouvrement", val: `${stats.totalCA > 0 ? Math.round((stats.totalCA / (stats.totalCA + stats.pendingTotal + stats.overdueTotal)) * 100) : 0}%` },
+                            { label: "Factures en retard", val: `${stats.overdueCount}` },
+                          ].map((s) => (
+                            <div key={s.label} className="flex items-center justify-between">
+                              <p className="text-xs font-sans text-atlantic-200/50">{s.label}</p>
+                              <p className="text-xs font-sans font-semibold text-white">{s.val}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-[10px] font-sans text-atlantic-200/40 mb-3">
+                            {activeDetail?.docs.length
+                              ? `${activeDetail.docs.length} document${activeDetail.docs.length > 1 ? "s" : ""}`
+                              : (selectedMetric === "protected" ? `${protectedBySam.docs.length} document${protectedBySam.docs.length > 1 ? "s" : ""}` : "Aucun document")}
+                          </p>
+                          {(selectedMetric === "protected" ? protectedBySam.docs : (activeDetail?.docs ?? [])).slice(0, 6).map((doc) => (
+                            <div key={doc.id} className="flex items-center justify-between py-1.5 border-b border-amber-400/5 last:border-0">
+                              <div>
+                                <p className="text-xs font-sans font-medium text-white">{doc.number}</p>
+                                <p className="text-[10px] font-sans text-atlantic-200/40">{getClientName(doc.client_id)}</p>
+                              </div>
+                              <p className="text-xs font-sans font-semibold text-gold-400">{formatCurrency(doc.total_ttc)}</p>
+                            </div>
+                          ))}
+                          {(selectedMetric === "protected" ? protectedBySam.docs : (activeDetail?.docs ?? [])).length === 0 && (
+                            <p className="text-xs font-sans text-atlantic-200/30 text-center py-2">Aucun document dans cette catégorie</p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Action Sam */}
+                  {stats.overdueCount > 0 && (
+                    <div className="px-5 py-4 border-t border-amber-400/10 flex items-center justify-between gap-4">
+                      <p className="text-xs font-sans text-atlantic-200/50">
+                        J&apos;ai préparé {stats.overdueCount} relance{stats.overdueCount > 1 ? "s" : ""}. Tu valides et c&apos;est envoyé.
+                      </p>
+                      <a
+                        href="/reminders"
+                        className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-400/15 text-amber-300 hover:bg-amber-400/25 text-xs font-sans font-semibold border border-amber-400/20 transition-all"
+                      >
+                        Voir les relances
+                      </a>
+                    </div>
+                  )}
                 </div>
               );
             })()}
-
-            {/* Action Sam */}
-            {stats.overdueCount > 0 && (
-              <div className="px-5 py-4 border-t border-amber-400/10 flex items-center justify-between gap-4">
-                <p className="text-xs font-sans text-atlantic-200/50">
-                  J&apos;ai préparé {stats.overdueCount} relance{stats.overdueCount > 1 ? "s" : ""}. Tu valides et c&apos;est envoyé.
-                </p>
-                <a
-                  href="/reminders"
-                  className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-400/15 text-amber-300 hover:bg-amber-400/25 text-xs font-sans font-semibold border border-amber-400/20 transition-all"
-                >
-                  Voir les relances
-                </a>
-              </div>
-            )}
-          </div>
+          </>
         )}
 
         {/* Sam intermédiaire — bandeau compact */}
