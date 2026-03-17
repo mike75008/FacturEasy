@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Topbar } from "@/components/dashboard/topbar";
 import { GlassCard } from "@/components/premium/glass-card";
 import { AnimatedCounter } from "@/components/premium/animated-counter";
@@ -38,6 +38,10 @@ export default function DashboardPage() {
   const [showSamIntro, setShowSamIntro] = useState(false);
   const [lastLogin, setLastLogin] = useState<Date | null>(null);
   const [selectedMetric, setSelectedMetric] = useState<string | null>(null);
+  const [samTyped, setSamTyped] = useState("");
+  const [samDoneTyping, setSamDoneTyping] = useState(false);
+  const [revealStep, setRevealStep] = useState(0);
+  const animationRunRef = useRef(false);
 
   useEffect(() => {
     if (!loading) {
@@ -59,6 +63,44 @@ export default function DashboardPage() {
     if (!introduced) setShowSamIntro(true);
     localStorage.setItem("last_login", new Date().toISOString());
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (appMode !== "decouverte" || loading) {
+      animationRunRef.current = false;
+      setRevealStep(0);
+      setSamTyped("");
+      setSamDoneTyping(false);
+      return;
+    }
+    if (animationRunRef.current) return;
+    animationRunRef.current = true;
+
+    const firstName = userName.split(" ")[0];
+    let text = "";
+    if (stats.overdueCount > 0) {
+      text = `${firstName}, ${stats.overdueCount} facture${stats.overdueCount > 1 ? "s" : ""} en retard — ${formatCurrency(stats.overdueTotal)} en jeu. C'est la priorité. J'ai tout préparé.`;
+    } else if (stats.pendingTotal > 0) {
+      text = `Tout est à jour. ${formatCurrency(stats.pendingTotal)} sont en route. On surveille ensemble.`;
+    } else {
+      text = `Pas encore de facture ce mois-ci. C'est le bon moment — je t'accompagne.`;
+    }
+
+    setSamTyped("");
+    setSamDoneTyping(false);
+    let i = 0;
+    const interval = setInterval(() => {
+      i++;
+      setSamTyped(text.slice(0, i));
+      if (i >= text.length) {
+        clearInterval(interval);
+        setSamDoneTyping(true);
+        [1, 2, 3, 4, 5, 6].forEach((step) => {
+          setTimeout(() => setRevealStep(step), (step - 1) * 200);
+        });
+      }
+    }, 22);
+    return () => clearInterval(interval);
+  }, [appMode, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stats = useMemo(() => {
     const now = new Date();
@@ -502,18 +544,25 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {/* Message Sam */}
-                  <div className="px-5 pb-4">
-                    <p className="text-sm font-sans text-white leading-relaxed">{samMsg}</p>
+                  {/* Message Sam — typewriter */}
+                  <div className="px-5 pb-4 min-h-[2.5rem]">
+                    {samDoneTyping ? (
+                      <p className="text-sm font-sans text-white leading-relaxed">{samMsg}</p>
+                    ) : (
+                      <p className="text-sm font-sans text-white leading-relaxed">
+                        {samTyped}
+                        <span className="inline-block w-0.5 h-4 bg-amber-300/70 ml-0.5 animate-pulse align-middle rounded-full" />
+                      </p>
+                    )}
                   </div>
 
-                  {/* 4 métriques cliquables */}
+                  {/* 4 métriques — révélation séquentielle */}
                   <div className="grid grid-cols-2 gap-px bg-amber-400/10 border-t border-amber-400/10">
-                    {indicators.map((ind) => (
+                    {indicators.map((ind, idx) => (
                       <button
                         key={ind.key}
                         onClick={() => setSelectedMetric(selectedMetric === ind.key ? null : ind.key)}
-                        className={`bg-atlantic-900/40 px-4 py-4 space-y-2 text-left transition-colors ${selectedMetric === ind.key ? "bg-amber-400/[0.08]" : "hover:bg-amber-400/[0.04]"}`}
+                        className={`bg-atlantic-900/40 px-4 py-4 space-y-2 text-left transition-all duration-500 ${revealStep >= idx + 1 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"} ${selectedMetric === ind.key ? "bg-amber-400/[0.08]" : "hover:bg-amber-400/[0.04]"}`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5">
@@ -538,10 +587,10 @@ export default function DashboardPage() {
                     ))}
                   </div>
 
-                  {/* 5ème métrique — Protégé par Sam (pleine largeur) */}
+                  {/* 5ème métrique — Protégé par Sam — arrive en dernier avec pulsation */}
                   <button
                     onClick={() => setSelectedMetric(selectedMetric === "protected" ? null : "protected")}
-                    className={`w-full flex items-center justify-between px-4 py-3 border-t border-amber-400/10 transition-colors ${selectedMetric === "protected" ? "bg-amber-400/[0.08]" : "hover:bg-amber-400/[0.04]"}`}
+                    className={`w-full flex items-center justify-between px-4 py-3 border-t border-amber-400/10 transition-all duration-700 ${revealStep >= 5 ? "opacity-100" : "opacity-0"} ${selectedMetric === "protected" ? "bg-amber-400/[0.08]" : "hover:bg-amber-400/[0.04]"}`}
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-base">🛡️</span>
@@ -615,6 +664,103 @@ export default function DashboardPage() {
                       </a>
                     </div>
                   )}
+                </div>
+              );
+            })()}
+
+            {/* Sam niveau 2 — Insights prédictifs */}
+            {(() => {
+              const now = new Date();
+              const insights: { emoji: string; text: React.ReactNode; action?: string; href?: string }[] = [];
+
+              // 1. Concentration client
+              const clientCA: Record<string, number> = {};
+              documents.filter((d) => d.type === "facture" && d.status === "paye").forEach((d) => {
+                clientCA[d.client_id] = (clientCA[d.client_id] || 0) + d.total_ttc;
+              });
+              const caEntries = Object.entries(clientCA).sort((a, b) => b[1] - a[1]);
+              if (caEntries.length > 0 && stats.totalCA > 0) {
+                const [topId, topAmount] = caEntries[0];
+                const pct = Math.round((topAmount / stats.totalCA) * 100);
+                if (pct >= 40) {
+                  insights.push({
+                    emoji: "⚠️",
+                    text: (<><span className="font-semibold text-white">{getClientName(topId)}</span> représente <span className="text-amber-300 font-semibold">{pct}%</span> de ton CA. Si ce client ralentit, tu le sens tout de suite.</>),
+                  });
+                }
+              }
+
+              // 2. Tendance mensuelle
+              const currentMonthCA = stats.monthlyCA[11];
+              const prevMonths = stats.monthlyCA.slice(0, 11).filter((v) => v > 0);
+              if (prevMonths.length >= 2) {
+                const avg = prevMonths.reduce((a, b) => a + b, 0) / prevMonths.length;
+                if (currentMonthCA < avg * 0.6 && avg > 0) {
+                  insights.push({
+                    emoji: "📉",
+                    text: (<>Ce mois-ci tu es à <span className="text-amber-300 font-semibold">{formatCurrency(currentMonthCA)}</span>, en dessous de ta moyenne de <span className="font-semibold text-white">{formatCurrency(Math.round(avg))}</span>. C&apos;est le moment de facturer.</>),
+                    action: "Créer une facture",
+                    href: "/documents",
+                  });
+                } else if (currentMonthCA > avg * 1.3 && avg > 0) {
+                  insights.push({
+                    emoji: "📈",
+                    text: (<>Excellent mois — <span className="text-emerald-400 font-semibold">{formatCurrency(currentMonthCA)}</span> encaissés, <span className="text-emerald-400 font-semibold">{Math.round(((currentMonthCA - avg) / avg) * 100)}%</span> au-dessus de ta moyenne.</>),
+                  });
+                }
+              }
+
+              // 3. Client avec plusieurs factures en retard
+              const overdueByClient: Record<string, number> = {};
+              documents.filter(
+                (d) => d.type === "facture" && d.status !== "paye" && d.status !== "annule" && !!d.due_date && new Date(d.due_date) < now
+              ).forEach((d) => { overdueByClient[d.client_id] = (overdueByClient[d.client_id] || 0) + 1; });
+              const worstEntry = Object.entries(overdueByClient).sort((a, b) => b[1] - a[1])[0];
+              if (worstEntry && worstEntry[1] >= 2) {
+                insights.push({
+                  emoji: "🔴",
+                  text: (<><span className="font-semibold text-white">{getClientName(worstEntry[0])}</span> a <span className="text-red-400 font-semibold">{worstEntry[1]} factures</span> en retard. Ça mérite une relance directe.</>),
+                  action: "Relancer",
+                  href: "/reminders",
+                });
+              }
+
+              // 4. Factures dues dans 7 jours (si pas déjà en retard)
+              const in7 = new Date(); in7.setDate(in7.getDate() + 7);
+              const upcoming = documents.filter(
+                (d) => d.type === "facture" && d.status === "envoye" && !!d.due_date && new Date(d.due_date) >= now && new Date(d.due_date) <= in7
+              );
+              if (upcoming.length > 0 && stats.overdueCount === 0) {
+                const upcomingTotal = upcoming.reduce((s, d) => s + d.total_ttc, 0);
+                insights.push({
+                  emoji: "⏰",
+                  text: (<><span className="text-amber-300 font-semibold">{formatCurrency(upcomingTotal)}</span> arrivent à échéance dans 7 jours sur <span className="font-semibold text-white">{upcoming.length} facture{upcoming.length > 1 ? "s" : ""}</span>. Je surveille pour toi.</>),
+                });
+              }
+
+              if (insights.length === 0) return null;
+
+              return (
+                <div className={`rounded-2xl border border-amber-400/10 bg-atlantic-900/20 overflow-hidden transition-all duration-700 ${revealStep >= 6 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"}`}>
+                  <div className="flex items-center gap-2 px-5 py-3 border-b border-amber-400/10">
+                    <div className="w-5 h-5 rounded-md bg-amber-400/20 flex items-center justify-center font-display font-bold text-amber-300 text-[10px] flex-shrink-0">S</div>
+                    <p className="text-[10px] font-sans font-semibold text-amber-300">Sam a remarqué</p>
+                  </div>
+                  <div className="divide-y divide-amber-400/5">
+                    {insights.slice(0, 3).map((ins, i) => (
+                      <div key={i} className="flex items-start justify-between gap-3 px-5 py-3">
+                        <div className="flex items-start gap-2 flex-1">
+                          <span className="text-sm flex-shrink-0 mt-0.5">{ins.emoji}</span>
+                          <p className="text-xs font-sans text-atlantic-200/60 leading-relaxed">{ins.text}</p>
+                        </div>
+                        {ins.action && ins.href && (
+                          <a href={ins.href} className="flex-shrink-0 text-[10px] font-sans font-semibold text-amber-300 hover:text-amber-200 transition-colors whitespace-nowrap">
+                            {ins.action} →
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               );
             })()}
