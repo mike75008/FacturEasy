@@ -71,7 +71,7 @@ function saveLocalDone(keys: Set<string>): void {
 // ─── Check TVA ────────────────────────────────────────────────────────────────
 
 function checkTVA(
-  docs: Doc[], deps: Depense[], org: Organization, tvaDecls: DeclarationTVA[],
+  docs: Doc[], deps: Depense[], org: Organization, tvaDecls: DeclarationTVA[], localDone: Set<string>,
 ): PendingDecl | null {
   const regime = org.regime_tva ?? "reel_mensuel";
   if (regime === "franchise_base" || regime === "exonere") return null;
@@ -89,7 +89,7 @@ function checkTVA(
     deadline = new Date(qEnd === 12 ? now.getFullYear() : pYear, qEnd === 12 ? 0 : qEnd, 24);
     label = `TVA T${prevQ} ${pYear}`;
     periodKey = `tva-${pYear}-T${prevQ}`;
-    alreadyDone = tvaDecls.some(d => d.annee === pYear && d.trimestre === prevQ);
+    alreadyDone = localDone.has(periodKey) || tvaDecls.some(d => d.annee === pYear && d.trimestre === prevQ);
     filterFn = (dt) => dt.getFullYear() === pYear && Math.floor(dt.getMonth() / 3) + 1 === prevQ;
   } else {
     const pm = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
@@ -97,7 +97,7 @@ function checkTVA(
     deadline = new Date(now.getFullYear(), now.getMonth(), 20);
     label = `TVA ${MONTH_NAMES[pm]} ${py}`;
     periodKey = `tva-${py}-${pm + 1}`;
-    alreadyDone = tvaDecls.some(d => d.annee === py && d.mois === pm + 1);
+    alreadyDone = localDone.has(periodKey) || tvaDecls.some(d => d.annee === py && d.mois === pm + 1);
     filterFn = (dt) => dt.getFullYear() === py && dt.getMonth() === pm;
   }
 
@@ -381,6 +381,12 @@ export function DeclarationGuardProvider({ children }: { children: React.ReactNo
   }, []);
 
   const markDone = useCallback((periodKey: string) => {
+    // Mode démo — on efface juste l'état demo
+    if (periodKey.endsWith("-demo")) {
+      setDemoLevel(0);
+      setDemoType(null);
+      return;
+    }
     setLocalDone((prev) => {
       const next = new Set(prev);
       next.add(periodKey);
@@ -404,7 +410,7 @@ export function DeclarationGuardProvider({ children }: { children: React.ReactNo
     if (!org || dataLoading) return { level: 0 as const, decl: null, allPending: [] };
 
     const pending = getMostUrgent([
-      checkTVA(documents, depenses, org, tvaDecls),
+      checkTVA(documents, depenses, org, tvaDecls, localDone),
       checkCFE(localDone),
       checkRevenus(localDone),
       checkURSSAFAE(documents, org, localDone),
@@ -506,13 +512,21 @@ export function DeclarationBlock({ children }: { children: React.ReactNode }) {
 
           {/* CTA */}
           {!decl.external ? (
-            <Link
-              href="/comptabilite"
-              className="flex items-center justify-center gap-2 w-full py-4 rounded-xl bg-gold-400 hover:bg-gold-300 text-atlantic-900 font-sans font-bold text-sm transition-colors"
-            >
-              <BookOpen className="w-4 h-4" />
-              Faire ma déclaration {decl.label}
-            </Link>
+            <div className="space-y-3">
+              <Link
+                href="/comptabilite"
+                className="flex items-center justify-center gap-2 w-full py-4 rounded-xl bg-gold-400 hover:bg-gold-300 text-atlantic-900 font-sans font-bold text-sm transition-colors"
+              >
+                <BookOpen className="w-4 h-4" />
+                Faire ma déclaration {decl.label}
+              </Link>
+              <button
+                onClick={() => markDone(decl.periodKey)}
+                className="w-full py-2.5 rounded-xl border border-atlantic-600/30 text-atlantic-200/40 hover:text-atlantic-200/70 hover:border-atlantic-500/40 font-sans text-xs transition-colors"
+              >
+                Ignorer pour l&apos;instant
+              </button>
+            </div>
           ) : (
             <div className="space-y-3">
               <a
@@ -529,6 +543,12 @@ export function DeclarationBlock({ children }: { children: React.ReactNode }) {
                 className="w-full py-3 rounded-xl border border-gold-400/20 text-gold-400 hover:bg-gold-400/10 font-sans text-sm transition-colors"
               >
                 J&apos;ai déclaré, rétablir mon accès
+              </button>
+              <button
+                onClick={() => markDone(decl.periodKey)}
+                className="w-full py-2.5 rounded-xl border border-atlantic-600/30 text-atlantic-200/40 hover:text-atlantic-200/70 hover:border-atlantic-500/40 font-sans text-xs transition-colors"
+              >
+                Ignorer pour l&apos;instant
               </button>
             </div>
           )}
