@@ -93,6 +93,9 @@ export default function LoginPage() {
               Créer un compte
             </Link>
           </p>
+          <Link href="/demo" className="text-atlantic-200/30 hover:text-atlantic-200/60 transition-colors block pt-1">
+            Voir la démo →
+          </Link>
         </div>
       </div>
     </PremiumCard>

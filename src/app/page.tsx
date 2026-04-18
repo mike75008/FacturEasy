@@ -164,9 +164,9 @@ export default function HomePage() {
 
         {/* CTA */}
         <div className="flex items-center gap-3">
-          <Link href="/dashboard">
+          <Link href="/demo">
             <button className="px-4 py-2 rounded-lg text-sm font-sans text-atlantic-200/60 hover:text-white hover:bg-white/5 transition-all">
-              Explorer la démo
+              Voir la démo
             </button>
           </Link>
           <Link href="/login">
