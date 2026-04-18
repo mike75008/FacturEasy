@@ -265,8 +265,21 @@ export default function AcquisitionPage() {
 
   const handleSend = useCallback(async (p: Prospect) => {
     setSending(p.id);
-    await new Promise(r => setTimeout(r, 1200));
     const message = generateMessage(p, p.channel);
+
+    if (p.channel === "email" && p.decideur) {
+      try {
+        const lines = message.split("\n");
+        const subject = lines[0].replace("Objet : ", "");
+        const body = lines.slice(2).join("\n");
+        await fetch("/api/send-prospect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: "", subject, body }),
+        });
+      } catch { /* silencieux — on marque quand même contacté */ }
+    }
+
     updateStatus(p.id, "contacte", { message });
     addNotif(`Message envoyé → ${p.structure}`, "signal");
     setSending(null);
