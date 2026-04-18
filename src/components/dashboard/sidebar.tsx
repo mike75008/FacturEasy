@@ -7,27 +7,40 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, Users, Package, FileText, Settings, Bell,
   Activity, Brain, ChevronLeft, LogOut,
-  Menu, X, UserCircle, MessageSquare, BookOpen, Headphones,
+  Menu, X, UserCircle, MessageSquare, BookOpen, Headphones, Lock, Zap,
 } from "lucide-react";
 import { useAppContext } from "@/lib/context/app-context";
+import type { AppMode } from "@/lib/context/app-context";
 import { useDeclarationGuard } from "@/components/dashboard/declaration-guard";
 import { computeInsights, filterUnseen } from "@/lib/insights";
 import { getUnreadCount } from "@/lib/tickets";
 import { getUnreadNotifCount } from "@/lib/notifications";
 
-const navItems = [
-  { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
-  { href: "/documents", label: "Documents", icon: FileText },
-  { href: "/clients", label: "Clients", icon: Users },
-  { href: "/products", label: "Produits", icon: Package },
-  { href: "/reminders", label: "Relances", icon: Bell },
-  { href: "/monitoring", label: "Monitoring", icon: Activity },
-  { href: "/comptabilite", label: "Comptabilité", icon: BookOpen },
-  { href: "/assistant", label: "Assistant IA", icon: Brain },
-  { href: "/messages", label: "Messages", icon: MessageSquare },
-  { href: "/support", label: "Support", icon: Headphones },
-  { href: "/settings", label: "Profil", icon: UserCircle },
-  { href: "/parametres", label: "Paramètres", icon: Settings },
+const MODE_ORDER: Record<AppMode, number> = {
+  decouverte: 0,
+  intermediaire: 1,
+  expert: 2,
+};
+
+const navItems: {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  requiredMode?: AppMode;
+}[] = [
+  { href: "/dashboard",    label: "Tableau de bord", icon: LayoutDashboard },
+  { href: "/documents",    label: "Documents",        icon: FileText },
+  { href: "/clients",      label: "Clients",          icon: Users },
+  { href: "/products",     label: "Produits",         icon: Package,      requiredMode: "intermediaire" },
+  { href: "/reminders",    label: "Relances",         icon: Bell,         requiredMode: "intermediaire" },
+  { href: "/comptabilite", label: "Comptabilité",     icon: BookOpen,     requiredMode: "intermediaire" },
+  { href: "/monitoring",   label: "Monitoring",       icon: Activity,     requiredMode: "expert" },
+  { href: "/acquisition",  label: "Acquisition",      icon: Zap,          requiredMode: "expert" },
+  { href: "/assistant",    label: "Assistant IA",     icon: Brain },
+  { href: "/messages",     label: "Messages",         icon: MessageSquare },
+  { href: "/support",      label: "Support",          icon: Headphones },
+  { href: "/settings",     label: "Profil",           icon: UserCircle },
+  { href: "/parametres",   label: "Paramètres",       icon: Settings },
 ];
 
 // Spring easing — dépasse légèrement puis se pose, c'est ça la grâce
@@ -38,7 +51,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { documents, clients } = useAppContext();
+  const { documents, clients, appMode } = useAppContext();
   const { level: declarationLevel } = useDeclarationGuard();
   const [insightCount, setInsightCount] = useState(0);
   const [ticketCount, setTicketCount] = useState(0);
@@ -173,80 +186,118 @@ export function Sidebar() {
 
           {navItems.map((item, index) => {
             const isActive = index === activeIndex;
+            const isLocked = item.requiredMode !== undefined
+              && MODE_ORDER[appMode] < MODE_ORDER[item.requiredMode];
+            const isPro   = item.requiredMode === "intermediaire";
+            const isExp   = item.requiredMode === "expert";
+
+            // Cadenas argent = Pro, or = Expert
+            const lockColor = isExp
+              ? "text-gold-400"
+              : "text-slate-400";
+            const lockBadgeColor = isExp
+              ? "bg-gold-400/10 text-gold-400 border-gold-400/20"
+              : "bg-slate-400/10 text-slate-300 border-slate-400/20";
+
+            const itemContent = (
+              <div
+                ref={(el) => { itemRefs.current[index] = el; }}
+                className={cn(
+                  "relative flex items-center gap-3 px-3 py-2.5 rounded-xl",
+                  "transition-colors duration-200",
+                  isLocked
+                    ? "text-atlantic-200/30 hover:text-atlantic-200/50 hover:bg-atlantic-600/10"
+                    : isActive
+                      ? "text-gold-400"
+                      : "text-atlantic-200/50 hover:text-white hover:bg-atlantic-600/15"
+                )}
+              >
+                {/* Barre gauche — fondu subtil, pas de pop */}
+                <div
+                  className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-full bg-gold-gradient"
+                  style={{
+                    height: isActive && !isLocked ? "20px" : "0px",
+                    opacity: isActive && !isLocked ? 1 : 0,
+                    transition: `height 0.35s ${SPRING}, opacity 0.2s ease`,
+                  }}
+                />
+
+                <div className="relative flex-shrink-0">
+                  <item.icon className="w-5 h-5 transition-colors duration-200" />
+                  {/* Cadenas plan */}
+                  {isLocked && (
+                    <span className={cn("absolute -top-1 -right-1", lockColor)}>
+                      <Lock className="w-2.5 h-2.5" />
+                    </span>
+                  )}
+                  {/* Badges notifications — seulement si pas verrouillé */}
+                  {!isLocked && item.href === "/assistant" && insightCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-400 flex items-center justify-center text-[8px] font-bold text-white animate-pulse">
+                      {insightCount > 9 ? "9+" : insightCount}
+                    </span>
+                  )}
+                  {!isLocked && item.href === "/support" && ticketCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-violet-400 flex items-center justify-center text-[8px] font-bold text-white animate-pulse">
+                      {ticketCount > 9 ? "9+" : ticketCount}
+                    </span>
+                  )}
+                  {!isLocked && item.href === "/messages" && notifCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-gold-400 flex items-center justify-center text-[8px] font-bold text-atlantic-900 animate-pulse">
+                      {notifCount > 9 ? "9+" : notifCount}
+                    </span>
+                  )}
+                  {!isLocked && item.href === "/comptabilite" && declarationLevel >= 1 && (
+                    <span className={cn(
+                      "absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full",
+                      declarationLevel === 2 ? "bg-red-400 animate-pulse" : "bg-amber-400",
+                    )} />
+                  )}
+                </div>
+
+                <span
+                  className="flex-1 text-sm font-sans font-medium whitespace-nowrap overflow-hidden"
+                  style={{
+                    maxWidth: showLabels || isMobile ? "160px" : "0px",
+                    opacity: showLabels || isMobile ? 1 : 0,
+                    transition: `max-width 0.3s ${SMOOTH}, opacity 0.2s ease`,
+                  }}
+                >
+                  {item.label}
+                </span>
+
+                {/* Badge plan requis */}
+                {isLocked && (showLabels || isMobile) && (
+                  <span
+                    className={cn(
+                      "flex-shrink-0 text-[9px] font-sans font-semibold px-1.5 py-0.5 rounded-full border",
+                      lockBadgeColor,
+                    )}
+                    style={{
+                      opacity: showLabels || isMobile ? 1 : 0,
+                      transition: `opacity 0.2s ease`,
+                    }}
+                  >
+                    {isPro ? "Pro" : "Expert"}
+                  </span>
+                )}
+
+                {/* Alertes label — seulement si pas verrouillé */}
+                {!isLocked && item.href === "/assistant" && insightCount > 0 && (showLabels || isMobile) && (
+                  <span className="flex-shrink-0 ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-400/20 text-red-300">
+                    {insightCount} alerte{insightCount > 1 ? "s" : ""}
+                  </span>
+                )}
+                {!isLocked && item.href === "/support" && ticketCount > 0 && (showLabels || isMobile) && (
+                  <span className="flex-shrink-0 ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-violet-400/20 text-violet-300">
+                    {ticketCount} nouveau{ticketCount > 1 ? "x" : ""}
+                  </span>
+                )}
+              </div>
+            );
 
             return (
               <Link key={item.href} href={item.href}>
-                <div
-                  ref={(el) => { itemRefs.current[index] = el; }}
-                  className={cn(
-                    "relative flex items-center gap-3 px-3 py-2.5 rounded-xl",
-                    "transition-colors duration-200",
-                    isActive
-                      ? "text-gold-400"
-                      : "text-atlantic-200/50 hover:text-white hover:bg-atlantic-600/15"
-                  )}
-                >
-                  {/* Barre gauche — fondu subtil, pas de pop */}
-                  <div
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-full bg-gold-gradient"
-                    style={{
-                      height: isActive ? "20px" : "0px",
-                      opacity: isActive ? 1 : 0,
-                      transition: `height 0.35s ${SPRING}, opacity 0.2s ease`,
-                    }}
-                  />
-
-                  <div className="relative flex-shrink-0">
-                    <item.icon
-                      className={cn(
-                        "w-5 h-5 transition-colors duration-200",
-                        isActive ? "text-gold-400" : ""
-                      )}
-                    />
-                    {item.href === "/assistant" && insightCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-400 flex items-center justify-center text-[8px] font-bold text-white animate-pulse">
-                        {insightCount > 9 ? "9+" : insightCount}
-                      </span>
-                    )}
-                    {item.href === "/support" && ticketCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-violet-400 flex items-center justify-center text-[8px] font-bold text-white animate-pulse">
-                        {ticketCount > 9 ? "9+" : ticketCount}
-                      </span>
-                    )}
-                    {item.href === "/messages" && notifCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-gold-400 flex items-center justify-center text-[8px] font-bold text-atlantic-900 animate-pulse">
-                        {notifCount > 9 ? "9+" : notifCount}
-                      </span>
-                    )}
-                    {item.href === "/comptabilite" && declarationLevel >= 1 && (
-                      <span className={cn(
-                        "absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full",
-                        declarationLevel === 2 ? "bg-red-400 animate-pulse" : "bg-amber-400",
-                      )} />
-                    )}
-                  </div>
-
-                  <span
-                    className="text-sm font-sans font-medium whitespace-nowrap overflow-hidden"
-                    style={{
-                      maxWidth: showLabels || isMobile ? "160px" : "0px",
-                      opacity: showLabels || isMobile ? 1 : 0,
-                      transition: `max-width 0.3s ${SMOOTH}, opacity 0.2s ease`,
-                    }}
-                  >
-                    {item.label}
-                    {item.href === "/assistant" && insightCount > 0 && (showLabels || isMobile) && (
-                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-400/20 text-red-300">
-                        {insightCount} alerte{insightCount > 1 ? "s" : ""}
-                      </span>
-                    )}
-                    {item.href === "/support" && ticketCount > 0 && (showLabels || isMobile) && (
-                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-violet-400/20 text-violet-300">
-                        {ticketCount} nouveau{ticketCount > 1 ? "x" : ""}
-                      </span>
-                    )}
-                  </span>
-                </div>
+                {itemContent}
               </Link>
             );
           })}
