@@ -464,8 +464,8 @@ export function DeclarationBlock({ children }: { children: React.ReactNode }) {
     const canMarkExternal = decl.external;
 
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-72px)] p-8">
-        <div className="max-w-lg w-full text-center space-y-6">
+      <div className="flex items-start justify-center min-h-[calc(100vh-72px)] overflow-y-auto p-4 sm:p-8 pt-6 sm:pt-8">
+        <div className="max-w-lg w-full text-center space-y-4 sm:space-y-6">
 
           {/* Icône */}
           <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto ${isLate ? "bg-red-400/10 border border-red-400/20" : "bg-amber-400/10 border border-amber-400/20"}`}>
