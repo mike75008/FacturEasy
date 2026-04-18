@@ -132,6 +132,8 @@ const DEMO_PROSPECTS: Prospect[] = [
 
 // ─── Génération messages — panneau, pas vendeur ───────────────────────────────
 
+const DEMO_URL = "https://factur-easy.vercel.app/demo";
+
 function generateMessage(p: Prospect, channel: Channel): string {
   const signalLabels: Record<SignalType, string> = {
     avis_negatif: "transition d'outil",
@@ -143,21 +145,21 @@ function generateMessage(p: Prospect, channel: Channel): string {
 
   if (channel === "linkedin") {
     if (p.score >= 90) {
-      return `Bonjour ${p.decideur ?? ""},\n\nNous avons construit une solution pour les structures qui gèrent des indépendants — automatisation déclarative complète, alertes fiscales proactives, et un tableau de bord blanc personnalisable à votre marque.\n\nC'est peut-être ce que vous cherchez.\n\n— FacturEasy`;
+      return `Bonjour ${p.decideur ?? ""},\n\nNous avons construit une solution pour les structures qui gèrent des indépendants — automatisation déclarative complète, alertes fiscales proactives, tableau de bord blanc personnalisable à votre marque.\n\nSi ça vous parle : ${DEMO_URL}\n\n— FacturEasy`;
     }
-    return `Bonjour ${p.decideur ?? ""},\n\nNous proposons une plateforme de ${topic} pour les structures qui accompagnent des indépendants. Simple à déployer, adaptable à votre contexte.\n\nDispo pour en parler si c'est pertinent.\n\n— FacturEasy`;
+    return `Bonjour ${p.decideur ?? ""},\n\nNous proposons une plateforme de ${topic} pour les structures qui accompagnent des indépendants. Simple à déployer, adaptable à votre contexte.\n\n${DEMO_URL}\n\n— FacturEasy`;
   }
 
   if (channel === "sms") {
-    return `FacturEasy — solution de facturation & compta pour vos indépendants. Automatisé, brandé à votre image. Répondez OUI si vous voulez voir.`;
+    return `FacturEasy — facturation & compta automatisée pour vos indépendants, sous votre marque. Voir en 90 secondes : ${DEMO_URL}`;
   }
 
   // email
   const subject = p.score >= 85
-    ? `Une solution pour vos ${p.clients_ae ?? "vos"} indépendants`
+    ? `Une solution pour vos ${p.clients_ae ?? ""} indépendants`
     : `${topic} — vous pourriez être intéressé`;
 
-  return `Objet : ${subject}\n\nBonjour,\n\nNous aidons les structures comme la vôtre à gérer la facturation et les obligations déclaratives de leurs clients indépendants — de façon automatisée et sous votre marque.\n\nSi vous avez ce sujet en tête, on peut vous montrer en 15 minutes.\n\n— L'équipe FacturEasy`;
+  return `Objet : ${subject}\n\nBonjour,\n\nNous aidons les structures comme la vôtre à gérer la facturation et les obligations déclaratives de leurs clients indépendants — automatisé, sous votre marque.\n\nVoir en 90 secondes : ${DEMO_URL}\n\n— L'équipe FacturEasy`;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

@@ -63,6 +63,11 @@ export default function DemoPage() {
   const feedRef = useRef<HTMLDivElement>(null);
   const timers  = useRef<ReturnType<typeof setTimeout>[]>([]);
 
+  useEffect(() => {
+    const views = parseInt(localStorage.getItem("demo_views") || "0");
+    localStorage.setItem("demo_views", String(views + 1));
+  }, []);
+
   function startDemo() {
     setStarted(true);
     setEvents([]);
