@@ -213,6 +213,11 @@ export default function HomePage() {
                 Se connecter
               </PremiumButton>
             </Link>
+            <Link href="/demo">
+              <button className="px-5 py-2.5 rounded-lg text-sm font-sans text-atlantic-200/60 hover:text-white hover:bg-white/5 transition-all border border-white/10">
+                Voir la démo →
+              </button>
+            </Link>
           </div>
 
           <div className="flex items-center justify-center gap-6 mt-10 text-atlantic-200/40 text-xs font-sans">
@@ -346,6 +351,11 @@ export default function HomePage() {
                 <PremiumButton variant="outline" size="lg" icon={<ArrowRight className="w-5 h-5" />}>
                   Se connecter
                 </PremiumButton>
+              </Link>
+              <Link href="/demo">
+                <button className="px-5 py-2.5 rounded-lg text-sm font-sans text-atlantic-200/60 hover:text-white hover:bg-white/5 transition-all border border-white/10">
+                  Voir la démo →
+                </button>
               </Link>
             </div>
           </div>
