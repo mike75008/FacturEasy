@@ -7,8 +7,32 @@ import { GlassCard } from "@/components/premium/glass-card";
 import {
   Zap, Target, TrendingUp, Mail, Linkedin, MessageSquare,
   RefreshCw, Eye, Send, Check, X, ChevronRight, Sparkles,
-  Building2, Users, AlertCircle, Clock, Star,
+  Building2, Users, AlertCircle, Clock, Star, Bell, Euro,
+  MousePointerClick, BarChart3,
 } from "lucide-react";
+
+// ─── Types notifs ─────────────────────────────────────────────────────────────
+
+interface Notif {
+  id: string;
+  text: string;
+  time: string;
+  type: "demo_view" | "conversion" | "signal";
+}
+
+const NOTIFS_KEY = "acquisition_notifs";
+
+function loadNotifs(): Notif[] {
+  try { return JSON.parse(localStorage.getItem(NOTIFS_KEY) || "[]"); }
+  catch { return []; }
+}
+
+function saveNotifs(notifs: Notif[]) {
+  localStorage.setItem(NOTIFS_KEY, JSON.stringify(notifs));
+}
+
+// Revenus par formule (simulation)
+const PRIX_LICENCE = 299; // white label €/mois
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -196,10 +220,13 @@ function saveProspects(prospects: Prospect[]) {
 export default function AcquisitionPage() {
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [selected, setSelected] = useState<Prospect | null>(null);
-  const [tab, setTab] = useState<"radar" | "pipeline">("radar");
+  const [tab, setTab] = useState<"radar" | "pipeline" | "cockpit">("cockpit");
   const [sending, setSending] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [dailyCount, setDailyCount] = useState(0);
+  const [notifs, setNotifs] = useState<Notif[]>([]);
+  const [demoViews, setDemoViews] = useState(0);
+  const [showNotifs, setShowNotifs] = useState(false);
 
   useEffect(() => {
     const data = loadProspects();
@@ -210,6 +237,19 @@ export default function AcquisitionPage() {
       new Date(p.replied_at).toDateString() === today
     ).length;
     setDailyCount(todayPositive);
+    setNotifs(loadNotifs());
+    // Vues démo simulées depuis localStorage (incrémentées par la page /demo)
+    const views = parseInt(localStorage.getItem("demo_views") || "0");
+    setDemoViews(views);
+  }, []);
+
+  const addNotif = useCallback((text: string, type: Notif["type"]) => {
+    const n: Notif = { id: Date.now().toString(), text, time: new Date().toISOString(), type };
+    setNotifs(prev => {
+      const next = [n, ...prev].slice(0, 20);
+      saveNotifs(next);
+      return next;
+    });
   }, []);
 
   const updateStatus = useCallback((id: string, status: ProspectStatus, extra?: Partial<Prospect>) => {
@@ -226,8 +266,9 @@ export default function AcquisitionPage() {
     await new Promise(r => setTimeout(r, 1200));
     const message = generateMessage(p, p.channel);
     updateStatus(p.id, "contacte", { message });
+    addNotif(`Message envoyé → ${p.structure}`, "signal");
     setSending(null);
-  }, [updateStatus]);
+  }, [updateStatus, addNotif]);
 
   const handleScan = useCallback(async () => {
     setScanning(true);
@@ -245,7 +286,20 @@ export default function AcquisitionPage() {
   return (
     <PageTransition>
       <div className="flex flex-col min-h-screen">
-        <Topbar title="Acquisition" subtitle="Signaux actifs · Prospects qualifiés · Résultats" />
+        <div className="relative">
+          <Topbar title="Acquisition" subtitle="Signaux actifs · Prospects qualifiés · Résultats" />
+          <button
+            onClick={() => setShowNotifs(v => !v)}
+            className="absolute right-4 top-1/2 -translate-y-1/2 relative p-2 rounded-xl text-atlantic-200/40 hover:text-gold-400 hover:bg-gold-400/10 transition-all"
+          >
+            <Bell className="w-5 h-5" />
+            {notifs.length > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-gold-400 text-[9px] font-bold text-atlantic-900 flex items-center justify-center">
+                {notifs.length > 9 ? "9+" : notifs.length}
+              </span>
+            )}
+          </button>
+        </div>
 
         <div className="flex-1 p-4 md:p-6 space-y-6 max-w-7xl mx-auto w-full">
 
@@ -286,7 +340,7 @@ export default function AcquisitionPage() {
           {/* Tabs + Scan */}
           <div className="flex items-center justify-between">
             <div className="flex gap-1 p-1 rounded-xl bg-atlantic-800/40 border border-atlantic-600/20">
-              {(["radar", "pipeline"] as const).map(t => (
+              {(["cockpit", "radar", "pipeline"] as const).map(t => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -296,7 +350,7 @@ export default function AcquisitionPage() {
                       : "text-atlantic-200/50 hover:text-white"
                   }`}
                 >
-                  {t === "radar" ? `Radar (${nouveaux.length})` : `Pipeline (${contactes.length + positifs.length})`}
+                  {t === "cockpit" ? "Cockpit" : t === "radar" ? `Radar (${nouveaux.length})` : `Pipeline (${contactes.length + positifs.length})`}
                 </button>
               ))}
             </div>
@@ -310,7 +364,74 @@ export default function AcquisitionPage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* ── Panneau notifs ────────────────────────────────────────────── */}
+          {showNotifs && (
+            <GlassCard className="p-4 border-gold-400/20">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-sans font-semibold text-white">Activité récente</span>
+                <button onClick={() => { setNotifs([]); saveNotifs([]); }} className="text-xs font-sans text-atlantic-200/30 hover:text-atlantic-200/60 transition-colors">Tout effacer</button>
+              </div>
+              {notifs.length === 0 ? (
+                <p className="text-xs font-sans text-atlantic-200/30 text-center py-3">Aucune activité pour l&apos;instant</p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {notifs.map(n => (
+                    <div key={n.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-atlantic-800/40">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-1.5 h-1.5 rounded-full ${n.type === "conversion" ? "bg-green-400" : n.type === "demo_view" ? "bg-blue-400" : "bg-gold-400"}`} />
+                        <span className="text-xs font-sans text-white/70">{n.text}</span>
+                      </div>
+                      <span className="text-[10px] font-sans text-atlantic-200/25">{timeAgo(n.time)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </GlassCard>
+          )}
+
+          {/* ── Cockpit ───────────────────────────────────────────────────── */}
+          {tab === "cockpit" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {[
+                  { label: "Vues démo", value: demoViews, icon: MousePointerClick, color: "text-blue-400", sub: "cette semaine" },
+                  { label: "Revenus potentiels", value: `${positifs.length * PRIX_LICENCE} €`, icon: Euro, color: "text-green-400", sub: "/mois si tous convertis" },
+                  { label: "Revenus confirmés", value: "0 €", icon: BarChart3, color: "text-gold-400", sub: "en attente 1ers paiements" },
+                ].map(({ label, value, icon: Icon, color, sub }) => (
+                  <GlassCard key={label} className="p-5">
+                    <Icon className={`w-5 h-5 ${color} mb-3`} />
+                    <p className="text-xs font-sans text-atlantic-200/40 uppercase tracking-wider mb-1">{label}</p>
+                    <p className={`text-2xl font-display font-bold ${color}`}>{value}</p>
+                    <p className="text-[10px] font-sans text-atlantic-200/25 mt-1">{sub}</p>
+                  </GlassCard>
+                ))}
+              </div>
+
+              <GlassCard className="p-5">
+                <p className="text-xs font-sans text-atlantic-200/40 uppercase tracking-wider mb-4">Tunnel de conversion</p>
+                {[
+                  { label: "Signaux détectés", count: prospects.length, color: "bg-gold-400" },
+                  { label: "Contactés", count: contactes.length + positifs.length, color: "bg-blue-400" },
+                  { label: "Réponses positives", count: positifs.length, color: "bg-green-400" },
+                ].map(({ label, count, color }) => {
+                  const pct = prospects.length > 0 ? Math.round(count / prospects.length * 100) : 0;
+                  return (
+                    <div key={label} className="mb-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-sans text-white/60">{label}</span>
+                        <span className="text-xs font-sans text-white/40">{count} · {pct}%</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-atlantic-700/50">
+                        <div className={`h-2 rounded-full ${color} transition-all duration-700`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </GlassCard>
+            </div>
+          )}
+
+          {tab !== "cockpit" && <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
             {/* Liste prospects */}
             <div className="space-y-3">
@@ -477,7 +598,7 @@ export default function AcquisitionPage() {
               )}
             </div>
 
-          </div>
+          </div>}
         </div>
       </div>
     </PageTransition>
