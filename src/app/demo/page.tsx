@@ -141,7 +141,7 @@ export default function DemoPage() {
               <TrendingUp className="w-6 h-6 text-amber-400" />
             </div>
             <div>
-              <p className="text-white/60 font-sans text-sm">Un cabinet. Un mois d'activité.</p>
+              <p className="text-white/60 font-sans text-sm">Un cabinet. Un mois d&apos;activité.</p>
               <p className="text-white/30 font-sans text-xs mt-1">Lancez la simulation pour voir.</p>
             </div>
             <button
