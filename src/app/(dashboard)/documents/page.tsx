@@ -202,7 +202,7 @@ function computePaymentBehavior(clientIdArg: string, docs: Doc[]): "excellent" |
 }
 
 export default function DocumentsPage() {
-  const { documents, clients, products, dataLoading: loading, refreshDocuments } = useAppContext();
+  const { documents, clients, products, dataLoading: loading, refreshDocuments, refreshClients } = useAppContext();
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<DocTypeFilter>("all");
   const [view, setView] = useState<ViewMode>("list");
@@ -784,9 +784,9 @@ export default function DocumentsPage() {
                               onClick={async () => {
                                 setSavingNewClient(true);
                                 try {
-                                  const { saveClient } = await import("@/lib/supabase/data");
-                                  const newC = await saveClient({ ...newClientForm, id: crypto.randomUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-                                  if (newC?.id) { setClientId(newC.id); refreshDocuments(); }
+                                  const { saveClient: saveClientDB } = await import("@/lib/supabase/data");
+                                  const newC = await saveClientDB({ ...newClientForm, id: crypto.randomUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+                                  if (newC?.id) { setClientId(newC.id); refreshClients(); }
                                 } catch { /* silencieux */ } finally {
                                   setSavingNewClient(false);
                                   setShowNewClient(false);
