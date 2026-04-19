@@ -228,7 +228,7 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastClientDoc, setLastClientDoc] = useState<Doc | null>(null);
   const [paymentHint, setPaymentHint] = useState("");
-  const [samSuggestion, setSamSuggestion] = useState<string | null>(null);
+  const [samSuggestion, setSamSuggestion] = useState<{ text: string; clientId: string; lines: LineForm[] } | null>(null);
 
   // Ouvrir un document directement via sessionStorage (depuis /relances ou ailleurs)
   useEffect(() => {
@@ -370,41 +370,36 @@ export default function DocumentsPage() {
     setPreviewNumber("");
     setSamSuggestion(null);
 
-    // ── Sam pré-remplissage intelligent ──────────────────────────────────────
+    // ── Sam suggestion intelligente — propose, n'impose pas ─────────────────
+    setClientId("");
+    setLines([emptyLine()]);
     const typeDocs = documents
       .filter((d) => d.type === type)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     if (typeDocs.length > 0) {
       const lastDoc = typeDocs[0];
-      // Client le plus récent pour ce type
-      setClientId(lastDoc.client_id);
-      // Lignes du dernier document de ce type
       try {
         const lastLines = await getDocumentLinesDB(lastDoc.id);
         if (lastLines.length > 0) {
-          setLines(lastLines.map((l) => ({
-            id: undefined,
-            description: l.description,
-            quantity: l.quantity,
-            unit: l.unit,
-            unit_price: l.unit_price,
-            tva_rate: l.tva_rate,
-            product_id: l.product_id,
-            discount_percent: 0,
-          })));
           const clientName = clients.find(c => c.id === lastDoc.client_id);
           const name = clientName?.company_name || `${clientName?.first_name || ""} ${clientName?.last_name || ""}`.trim();
-          setSamSuggestion(`J'ai pré-rempli avec ta dernière ${DOC_TYPE_CONFIG[type]?.label.toLowerCase() || "document"}${name ? ` — ${name}` : ""}. Modifie ce qui change.`);
-        } else {
-          setLines([emptyLine()]);
+          setSamSuggestion({
+            text: `Reprendre la dernière ${DOC_TYPE_CONFIG[type]?.label.toLowerCase() || "document"}${name ? ` (${name})` : ""} ?`,
+            clientId: lastDoc.client_id,
+            lines: lastLines.map((l) => ({
+              id: undefined,
+              description: l.description,
+              quantity: l.quantity,
+              unit: l.unit,
+              unit_price: l.unit_price,
+              tva_rate: l.tva_rate,
+              product_id: l.product_id,
+              discount_percent: 0,
+            })),
+          });
         }
-      } catch {
-        setLines([emptyLine()]);
-      }
-    } else {
-      setClientId("");
-      setLines([emptyLine()]);
+      } catch { /* silencieux */ }
     }
 
     setView("create");
@@ -744,13 +739,17 @@ export default function DocumentsPage() {
                     </span>
                   </div>
                   {samSuggestion && (
-                    <div className="flex items-start gap-2.5 p-3 rounded-xl bg-gold-400/5 border border-gold-400/15 mb-4">
-                      <Sparkles className="w-4 h-4 text-gold-400 shrink-0 mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-sans text-white/70">{samSuggestion}</p>
-                      </div>
-                      <button onClick={() => setSamSuggestion(null)} className="text-atlantic-200/20 hover:text-atlantic-200/50 transition-colors">
-                        <X className="w-3.5 h-3.5" />
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-gold-400/5 border border-gold-400/15 mb-4">
+                      <Sparkles className="w-4 h-4 text-gold-400 shrink-0" />
+                      <p className="text-xs font-sans text-white/70 flex-1">{samSuggestion.text}</p>
+                      <button
+                        onClick={() => { setClientId(samSuggestion.clientId); setLines(samSuggestion.lines); setSamSuggestion(null); }}
+                        className="text-xs font-sans font-semibold text-gold-400 px-3 py-1.5 rounded-lg bg-gold-400/10 border border-gold-400/20 hover:bg-gold-400/20 transition-all whitespace-nowrap"
+                      >
+                        Oui
+                      </button>
+                      <button onClick={() => setSamSuggestion(null)} className="text-xs font-sans text-atlantic-200/30 hover:text-atlantic-200/60 transition-colors whitespace-nowrap">
+                        Non merci
                       </button>
                     </div>
                   )}
