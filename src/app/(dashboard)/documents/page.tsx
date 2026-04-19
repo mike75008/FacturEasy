@@ -229,6 +229,9 @@ export default function DocumentsPage() {
   const [lastClientDoc, setLastClientDoc] = useState<Doc | null>(null);
   const [paymentHint, setPaymentHint] = useState("");
   const [samSuggestion, setSamSuggestion] = useState<{ text: string; clientId: string; lines: LineForm[] } | null>(null);
+  const [showNewClient, setShowNewClient] = useState(false);
+  const [newClientForm, setNewClientForm] = useState({ first_name: "", last_name: "", company_name: "", email: "", phone: "" });
+  const [savingNewClient, setSavingNewClient] = useState(false);
 
   // Ouvrir un document directement via sessionStorage (depuis /relances ou ailleurs)
   useEffect(() => {
@@ -755,7 +758,50 @@ export default function DocumentsPage() {
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-sans font-medium text-gold-300 mb-2">Client *</label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-sans font-medium text-gold-300">Client *</label>
+                        <button
+                          type="button"
+                          onClick={() => { setShowNewClient(!showNewClient); setNewClientForm({ first_name: "", last_name: "", company_name: "", email: "", phone: "" }); }}
+                          className="flex items-center gap-1 text-xs font-sans text-gold-400/70 hover:text-gold-400 transition-colors"
+                        >
+                          <Plus className="w-3 h-3" /> Nouveau client
+                        </button>
+                      </div>
+                      {showNewClient ? (
+                        <div className="space-y-2 p-3 rounded-xl bg-atlantic-800/40 border border-gold-400/15">
+                          <div className="grid grid-cols-2 gap-2">
+                            <input placeholder="Prénom" value={newClientForm.first_name} onChange={e => setNewClientForm(p => ({ ...p, first_name: e.target.value }))} className="premium-input text-sm" />
+                            <input placeholder="Nom *" value={newClientForm.last_name} onChange={e => setNewClientForm(p => ({ ...p, last_name: e.target.value }))} className="premium-input text-sm" />
+                          </div>
+                          <input placeholder="Société (optionnel)" value={newClientForm.company_name} onChange={e => setNewClientForm(p => ({ ...p, company_name: e.target.value }))} className="premium-input w-full text-sm" />
+                          <input placeholder="Email" type="email" value={newClientForm.email} onChange={e => setNewClientForm(p => ({ ...p, email: e.target.value }))} className="premium-input w-full text-sm" />
+                          <input placeholder="Téléphone" value={newClientForm.phone} onChange={e => setNewClientForm(p => ({ ...p, phone: e.target.value }))} className="premium-input w-full text-sm" />
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              type="button"
+                              disabled={savingNewClient || !newClientForm.last_name}
+                              onClick={async () => {
+                                setSavingNewClient(true);
+                                try {
+                                  const { saveClient } = await import("@/lib/supabase/data");
+                                  const newC = await saveClient({ ...newClientForm, id: crypto.randomUUID(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+                                  if (newC?.id) { setClientId(newC.id); refreshDocuments(); }
+                                } catch { /* silencieux */ } finally {
+                                  setSavingNewClient(false);
+                                  setShowNewClient(false);
+                                }
+                              }}
+                              className="flex-1 py-2 rounded-lg bg-gold-400 hover:bg-gold-300 text-atlantic-900 text-xs font-sans font-bold transition-all disabled:opacity-50"
+                            >
+                              {savingNewClient ? "Enregistrement…" : "Créer et sélectionner"}
+                            </button>
+                            <button type="button" onClick={() => setShowNewClient(false)} className="px-3 py-2 rounded-lg border border-atlantic-600/30 text-atlantic-200/40 hover:text-white text-xs font-sans transition-colors">
+                              Annuler
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
                       <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="premium-input w-full text-sm">
                         <option value="">Sélectionner un client</option>
                         {clients.map((c) => (
@@ -764,6 +810,7 @@ export default function DocumentsPage() {
                           </option>
                         ))}
                       </select>
+                      )}
                       {clientId && (() => {
                         const pb = computePaymentBehavior(clientId, documents);
                         if (!pb) return null;
